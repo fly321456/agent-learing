@@ -1,1 +1,10 @@
-# Tool implementations will be added in later lessons.
+﻿from datetime import datetime
+
+
+def get_current_time():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+TOOL_REGISTRY = {
+    "get_current_time": get_current_time,
+}

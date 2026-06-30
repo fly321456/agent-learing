@@ -1,1 +1,1 @@
-# Prompt constants will be added in later lessons.
+﻿DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."

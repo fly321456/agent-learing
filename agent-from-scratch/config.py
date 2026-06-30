@@ -1,1 +1,1 @@
-# Configuration values will be added in the next lesson.
+﻿DEFAULT_MODEL = "gpt-5"

@@ -27,6 +27,52 @@
 
 ---
 
+## 当前阶段划分
+
+### 阶段1：核心认知
+
+重点建立：
+
+- Agent / Tool / Loop
+- Tool Calling 本质
+- Tool Schema
+- Responses API
+- 状态机与事件流
+- Runner 与 Agent Runtime
+
+### 阶段2：项目过渡
+
+重点建立：
+
+- Coding Agent 项目启动意识
+- LLM Interface 抽象
+- 为什么先理解 OpenAI Agents SDK
+- 100 行以内最小 Agent 视角
+
+### 阶段3：Sprint1
+
+重点完成：
+
+- 最小 Agent 架构
+- 打通 LLM 调用链
+- 最小 Agent Loop
+- 多 Tool 支持
+- ToolManager 抽取
+- Prompt / Message 组织
+- Session 初版
+- 测试与错误处理初版
+
+### 阶段4：工程化能力
+
+重点扩展：
+
+- Logging / Tracing / Retry / Config
+- Token / 上下文 / 压缩 / 摘要
+- Memory / Session / 长任务稳定性
+- RAG / MCP / 多 Agent 前置能力
+
+---
+
 ## 仓库结构
 
 ```text

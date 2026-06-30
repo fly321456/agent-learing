@@ -1,5 +1,5 @@
-class Agent:
-    def __init__(self, model, instructions, tools):
-        self.model = model
+﻿class Agent:
+    def __init__(self, llm, instructions, tools=None):
+        self.llm = llm
         self.instructions = instructions
-        self.tools = tools
+        self.tools = tools or []

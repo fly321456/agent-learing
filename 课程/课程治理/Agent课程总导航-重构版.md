@@ -34,8 +34,9 @@
 5. `课程/阶段1-核心认知/第五课-第一个Agent Loop认知-学习整理.md`
 6. `课程/阶段1-核心认知/第六课-Responses API与事件输出-学习整理.md`
 7. `课程/阶段1-核心认知/第七课-状态机与事件流-学习整理.md`
+8. `课程/阶段1-核心认知/第八课-Runner与Agent Runtime-学习整理.md`
 
-这一阶段的目标不是记笔记数量，而是吃透七个最核心概念：
+这一阶段的目标不是记笔记数量，而是吃透八个最核心概念：
 
 - Agent = LLM + Tool + Loop
 - Tool Calling 的本质是结构化决策，不是模型执行代码
@@ -44,6 +45,7 @@
 - Agent Loop 是 Agent 的灵魂
 - Responses API 返回的是事件，不只是文本
 - Agent 本质上是状态机 + 事件流
+- Agent 是 Runtime，Runner 负责运行生命周期
 
 学习要求：
 
@@ -57,7 +59,10 @@
 
 学习路径：
 
-按文件顺序快速过一遍即可。
+1. `课程/阶段2-项目过渡/第九课-Coding Agent项目启动-学习整理.md`
+2. `课程/阶段2-项目过渡/第十课-LLM Interface抽象-学习整理.md`
+3. `课程/阶段2-项目过渡/第十一课-先学OpenAI Agents SDK-学习整理.md`
+4. `课程/阶段2-项目过渡/第十二课-100行以内最小Agent-学习整理.md`
 
 这一阶段的作用不是新增大量知识，而是完成思维切换：
 
@@ -77,7 +82,16 @@
 
 学习路径：
 
-从 `课程/阶段3-Sprint1/` 的第一课开始，按顺序学习。
+1. `课程/阶段3-Sprint1/Sprint1-Lesson1-初始化Agent架构-学习整理.md`
+2. `课程/阶段3-Sprint1/Sprint1-Lesson2-打通LLM调用链-学习整理.md`
+3. `课程/阶段3-Sprint1/Sprint1-Lesson3-最小Agent Loop-学习整理.md`
+4. `课程/阶段3-Sprint1/Sprint1-Lesson4-多Tool支持-学习整理.md`
+5. `课程/阶段3-Sprint1/Sprint1-Lesson5-抽出ToolManager-学习整理.md`
+6. `课程/阶段3-Sprint1/Sprint1-Lesson6-Prompt与Message组织-学习整理.md`
+7. `课程/阶段3-Sprint1/Sprint1-Lesson7-Session初版-学习整理.md`
+8. `课程/阶段3-Sprint1/Sprint1-Lesson8-最小测试-学习整理.md`
+9. `课程/阶段3-Sprint1/Sprint1-Lesson9-错误处理初版-学习整理.md`
+10. `课程/阶段3-Sprint1/Sprint1-Lesson10-Sprint1重构课-学习整理.md`
 
 这一阶段是整个课程第一次真正进入“开发主线”。
 
@@ -217,7 +231,7 @@
 ### 第1周
 
 - 完成阶段1全部学习整理 + 面试题整理
-- 目标：能清楚讲明白 Agent / Tool / Loop / Responses / 状态机
+- 目标：能清楚讲明白 Agent / Tool / Loop / Responses / 状态机 / Runner
 
 ### 第2周
 
