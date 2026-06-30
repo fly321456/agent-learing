@@ -1,0 +1,6 @@
+agent_state.json
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.vscode/
