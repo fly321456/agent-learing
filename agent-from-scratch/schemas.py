@@ -1,4 +1,4 @@
-﻿TIME_TOOL_SCHEMA = {
+TIME_TOOL_SCHEMA = {
     "type": "function",
     "name": "get_current_time",
     "description": "Get the current local time when the user asks for the current time, date, or now.",

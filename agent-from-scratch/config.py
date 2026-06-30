@@ -1,1 +1,1 @@
-﻿DEFAULT_MODEL = "gpt-5"
+DEFAULT_MODEL = "gpt-5"

@@ -1,4 +1,4 @@
-﻿from agent import Agent
+from agent import Agent
 from llm import OpenAILLM
 from prompts import DEFAULT_SYSTEM_PROMPT
 from runner import Runner
