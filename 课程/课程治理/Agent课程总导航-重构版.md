@@ -15,14 +15,14 @@
 
 建议回看顺序：
 
-1. [第一课-批改整理.md](../阶段1-核心认知/第一课-批改整理.md)
-2. [第二课-学习整理.md](../阶段1-核心认知/第二课-学习整理.md)
-3. [第三课-学习整理.md](../阶段1-核心认知/第三课-学习整理.md)
-4. [第四课-学习整理.md](../阶段1-核心认知/第四课-学习整理.md)
-5. [第五课-学习整理.md](../阶段1-核心认知/第五课-学习整理.md)
-6. [第六课-学习整理.md](../阶段1-核心认知/第六课-学习整理.md)
-7. [第七课-学习整理.md](../阶段1-核心认知/第七课-学习整理.md)
-8. [第八课-学习整理.md](../阶段1-核心认知/第八课-学习整理.md)
+1. [第一课-什么是Agent-批改整理.md](../阶段1-核心认知/第一课-什么是Agent-批改整理.md)
+2. [第二课-Tool Calling本质-学习整理.md](../阶段1-核心认知/第二课-Tool Calling本质-学习整理.md)
+3. [第三课-Agent项目结构-学习整理.md](../阶段1-核心认知/第三课-Agent项目结构-学习整理.md)
+4. [第四课-Tool Schema与三层世界-学习整理.md](../阶段1-核心认知/第四课-Tool Schema与三层世界-学习整理.md)
+5. [第五课-第一个Agent Loop认知-学习整理.md](../阶段1-核心认知/第五课-第一个Agent Loop认知-学习整理.md)
+6. [第六课-Responses API与事件输出-学习整理.md](../阶段1-核心认知/第六课-Responses API与事件输出-学习整理.md)
+7. [第七课-状态机与事件流-学习整理.md](../阶段1-核心认知/第七课-状态机与事件流-学习整理.md)
+8. [第八课-Runner与Agent Runtime-学习整理.md](../阶段1-核心认知/第八课-Runner与Agent Runtime-学习整理.md)
 
 ### 阶段二：项目过渡材料
 
@@ -35,10 +35,10 @@
 
 包含：
 
-- [第九课-学习整理.md](../阶段2-项目过渡/第九课-学习整理.md)
-- [第十课-学习整理.md](../阶段2-项目过渡/第十课-学习整理.md)
-- [第十一课-学习整理.md](../阶段2-项目过渡/第十一课-学习整理.md)
-- [第十二课-学习整理.md](../阶段2-项目过渡/第十二课-学习整理.md)
+- [第九课-Coding Agent项目启动-学习整理.md](../阶段2-项目过渡/第九课-Coding Agent项目启动-学习整理.md)
+- [第十课-LLM Interface抽象-学习整理.md](../阶段2-项目过渡/第十课-LLM Interface抽象-学习整理.md)
+- [第十一课-先学OpenAI Agents SDK-学习整理.md](../阶段2-项目过渡/第十一课-先学OpenAI Agents SDK-学习整理.md)
+- [第十二课-100行以内最小Agent-学习整理.md](../阶段2-项目过渡/第十二课-100行以内最小Agent-学习整理.md)
 
 ### 阶段三：当前唯一主线 Sprint 1
 
@@ -46,12 +46,12 @@
 
 当前必须按这个顺序推进：
 
-1. [Sprint1-Lesson1-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson1-学习整理.md)
-2. [Sprint1-Lesson2-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson2-学习整理.md)
-3. [Sprint1-Lesson3-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson3-学习整理.md)
-4. [Sprint1-Lesson4-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson4-学习整理.md)
-5. [Sprint1-Lesson5-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson5-学习整理.md)
-6. [Sprint1-Lesson6-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson6-学习整理.md)
+1. [Sprint1-Lesson1-初始化Agent架构-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson1-初始化Agent架构-学习整理.md)
+2. [Sprint1-Lesson2-打通LLM调用链-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson2-打通LLM调用链-学习整理.md)
+3. [Sprint1-Lesson3-最小Agent Loop-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson3-最小Agent Loop-学习整理.md)
+4. [Sprint1-Lesson4-多Tool支持-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson4-多Tool支持-学习整理.md)
+5. [Sprint1-Lesson5-抽出ToolManager-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson5-抽出ToolManager-学习整理.md)
+6. [Sprint1-Lesson6-Prompt与Message组织-学习整理.md](../阶段3-Sprint1/Sprint1-Lesson6-Prompt与Message组织-学习整理.md)
 
 后续固定追加顺序：
 

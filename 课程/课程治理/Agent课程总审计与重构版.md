@@ -39,12 +39,12 @@
 
 从现在开始，唯一主线是：
 
-- `../阶段3-Sprint1/Sprint1-Lesson1-学习整理.md`
-- `../阶段3-Sprint1/Sprint1-Lesson2-学习整理.md`
-- `../阶段3-Sprint1/Sprint1-Lesson3-学习整理.md`
-- `../阶段3-Sprint1/Sprint1-Lesson4-学习整理.md`
-- `../阶段3-Sprint1/Sprint1-Lesson5-学习整理.md`
-- `../阶段3-Sprint1/Sprint1-Lesson6-学习整理.md`
+- `../阶段3-Sprint1/Sprint1-Lesson1-初始化Agent架构-学习整理.md`
+- `../阶段3-Sprint1/Sprint1-Lesson2-打通LLM调用链-学习整理.md`
+- `../阶段3-Sprint1/Sprint1-Lesson3-最小Agent Loop-学习整理.md`
+- `../阶段3-Sprint1/Sprint1-Lesson4-多Tool支持-学习整理.md`
+- `../阶段3-Sprint1/Sprint1-Lesson5-抽出ToolManager-学习整理.md`
+- `../阶段3-Sprint1/Sprint1-Lesson6-Prompt与Message组织-学习整理.md`
 
 ### 4. 后续固定推进顺序
 
