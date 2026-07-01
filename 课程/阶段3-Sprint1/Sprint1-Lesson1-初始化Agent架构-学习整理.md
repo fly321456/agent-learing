@@ -1,217 +1,106 @@
-# Sprint 1 - Lesson 1 学习整理
+# Sprint1 - Lesson1 学习整理：初始化 Agent 架构
 
 ## 本节定位
 
-从这一节开始，课程正式从“概念学习”切换到“项目开发”。
+从这一节开始，课程正式从“阶段 2 的项目过渡”进入“阶段 3 的 Sprint1 实战实现”。
 
-这一节的目标不是把 Agent 一次写完，而是先搭出最小工程骨架，并明确最核心的职责拆分：
+如果说阶段 2 解决的是：
 
-- `Agent` 只负责配置
-- `Runner` 只负责运行
-- `LLM` 先定义抽象接口
+- 为什么要做自己的 Coding Agent
+- 为什么要抽象 `LLM Interface`
+- 为什么要先理解 OpenAI Agents SDK
+- 为什么要先写出 100 行以内的最小 Agent
+- 为什么输出不能只停留在纯文本
+- 为什么需要 `LLMResponse` 这样的统一响应协议
 
-这一步非常关键，因为它决定了后面整个项目是不是会演化成一个清晰的 Agent Framework，而不是一个堆满逻辑的大脚本。
+那么 Sprint1-Lesson1 要解决的就不再是“理解为什么”，而是：
+
+> 在 `agent-from-scratch/` 里，先把第一版可演进的工程骨架搭出来
+
+也就是说，这一节的目标不是一次写完 Agent，而是：
+
+> 先把整个项目最关键的职责边界立住
 
 ---
 
-## 本节目标
+## 为什么 Sprint1 不能直接从“写功能”开始
 
-真正实现并理解下面这个最小运行结构：
+很多初学者进入项目实战时，很容易一上来就想：
+
+- 先把 `run()` 写出来
+- 先把 OpenAI 调起来
+- 先把 Tool Calling 跑通
+
+这样做短期看很快，但中期就很容易出问题。
+
+因为一旦一开始没有把边界立清楚，后面最常见的结果就是：
+
+- `Agent` 又存配置又跑逻辑
+- `Runner` 不存在，或者只是一个空壳
+- `llm.py` 只是 SDK 调用片段
+- 工具、Prompt、Schema、配置混在一起
+- 后面再想加 Session、Tracing、`LLMResponse` 会越来越别扭
+
+所以 Sprint1 的第一课不应该追求“先跑起来”，而应该先解决一个更底层的问题：
+
+> 这个项目的第一版结构，是否具备继续演进成 Agent Framework 的可能性
+
+---
+
+## 这节课和阶段 2 的衔接关系
+
+要真正看懂这一节，最好把它放在前面几课的延长线上理解。
+
+### 第九课告诉我们
+
+> 从现在开始不是继续堆概念，而是开始围绕真实项目推进
+
+### 第十课告诉我们
+
+> 模型调用应该被隔离到 `LLM Interface` 后面
+
+### 第十一课告诉我们
+
+> 官方框架的价值在于分层和职责边界，而不是魔法 API
+
+### 第十二课告诉我们
+
+> 一个最小 Agent 的核心闭环其实就是 `LLM -> Tool -> LLM -> Finish`
+
+### 第十三课告诉我们
+
+> 输出不能长期停留在纯文本，未来一定会走向结构化协议
+
+### 第十四课告诉我们
+
+> 结构化协议最终会落成 `LLMResponse / ToolCall / Event / Block`
+
+那么 Sprint1-Lesson1 在这个链路中的任务就非常明确：
+
+> 先给这些抽象预留正确的位置，让后面的实现不会把它们挤碎
+
+---
+
+## 本节真正要完成的不是功能，而是骨架
+
+这节课结束时，最重要的成果不是“功能有多完整”，而是下面这个问题有没有回答清楚：
 
 ```text
-User
-  │
-  ▼
-Runner
-  │
-  ▼
-LLM
-  │
-  ▼
-是否调用 Tool？
-  │
- ├── 否 → 返回答案
- │
- └── 是
-      │
-      ▼
-执行 Tool
-      │
-      ▼
-Tool Result
-      │
-      ▼
-LLM
-      │
-      ▼
-最终答案
+这个项目里，谁负责定义 Agent？
+谁负责运行 Agent？
+谁负责模型调用边界？
+谁负责 Tool？
+谁负责 Schema？
+谁负责 Prompt？
+谁负责配置？
 ```
 
-这一套结构几乎就是大多数 Agent Framework 的核心。
+只要这些职责还混在一起，后面功能写得越多，返工成本就越高。
 
----
-
-## 本节最重要的设计点
-
-很多初学者会本能地写出：
-
-```python
-class Agent:
-    def run(self):
-        ...
-```
-
-这节课明确指出这不是一个好的第一版设计。
-
-原因是：
-
-> Agent 是配置，不是执行器。
-
-所以第一版必须拆成两个类：
-
-- `Agent`
-- `Runner`
-
-这是后续理解 OpenAI Agents SDK、LangGraph、OpenHands 等框架的关键前提。
-
----
-
-## Agent 负责什么
-
-第一版 `Agent` 只保存最核心的静态配置：
-
-```python
-class Agent:
-    def __init__(self, model, instructions, tools):
-        self.model = model
-        self.instructions = instructions
-        self.tools = tools
-```
-
-这里有几个重要结论：
-
-- `Agent` 不包含 `run()`
-- `Agent` 不处理 Loop
-- `Agent` 不负责 Tool 执行
-- `Agent` 不直接管理 Memory / Session / Retry
-
-也就是说：
-
-> Agent 回答的是“我是谁”
-
-它更像一个能力配置对象，而不是一个完整运行时。
-
----
-
-## Runner 负责什么
-
-真正运行的是 `Runner`：
-
-```python
-class Runner:
-    def run(self, agent, user_input):
-        ...
-```
-
-这里为什么是：
-
-```python
-run(agent, user_input)
-```
-
-而不是：
-
-```python
-self.agent
-```
-
-因为这意味着一个 `Runner` 可以运行多个不同 Agent，例如：
-
-- Code Agent
-- Review Agent
-- Search Agent
-
-这会让系统更灵活，也更符合框架设计思路。
-
-所以：
-
-> Agent 负责定义能力，Runner 负责驱动生命周期。
-
----
-
-## 本节背后的软件工程思想
-
-这一节实际上在训练两个非常重要的工程原则。
-
-### 1. 高内聚、低耦合
-
-- `Agent` 只管 Agent 的配置
-- `Runner` 只管运行过程
-
-不要把所有逻辑都塞进一个类里。
-
-### 2. 单一职责
-
-一个类只做一件事：
-
-- `Agent`：定义智能体
-- `Runner`：执行流程
-- `BaseLLM`：定义模型接口
-
-这也是为什么优秀 Agent 框架源码通常可读性更高。
-
----
-
-## LLM 抽象为什么现在就要加
-
-这一节虽然还没有真正接 OpenAI，但已经先把 `llm.py` 放进了项目结构中。
-
-原因是：
-
-很多初学者会在项目里到处直接写：
-
-```python
-client.responses.create(...)
-```
-
-这样一旦底层模型发生变化，例如：
-
-- GPT
-- Claude
-- Gemini
-- Qwen
-
-整个项目都要跟着改。
-
-所以应该先定义统一接口，例如：
-
-```python
-class BaseLLM:
-    def generate(self, messages, tools=None):
-        raise NotImplementedError
-```
-
-这样上层系统只依赖：
-
-```python
-generate()
-```
-
-而不依赖某个具体供应商 SDK。
-
-这本质上就是：
-
-> 依赖倒置
-
----
-
-## 本节项目结构
-
-本节完成后的最小项目骨架如下：
+所以这一节的目标，实际上是把下面这套最小工程骨架立起来：
 
 ```text
 agent-from-scratch/
-│
 ├── app.py
 ├── config.py
 ├── llm.py
@@ -223,60 +112,291 @@ agent-from-scratch/
 └── requirements.txt
 ```
 
-这套结构的意义在于：
-
-- `app.py`：程序入口
-- `agent.py`：Agent 定义
-- `runner.py`：运行器
-- `llm.py`：模型抽象接口
-- `tools.py`：工具实现
-- `schemas.py`：工具 Schema
-- `prompts.py`：Prompt 资源
-- `config.py`：配置
-
-虽然现在很多文件还是占位，但骨架已经正确了。
+这不是为了“看起来像框架”，而是为了保证后续每一层都能继续长。
 
 ---
 
-## 本节代码成果
+## 这一节最关键的设计点：先拆边界，再写实现
 
-### `agent.py`
-
-实现了最小 `Agent` 配置类。
-
-### `runner.py`
-
-实现了第一版 `Runner.run()`，暂时只做最简单的输入和状态输出。
-
-### `llm.py`
-
-实现了 `BaseLLM` 抽象接口，下一节将继续扩展为 `OpenAILLM`。
-
-### `app.py`
-
-完成了最小启动流程：
+很多同学写第一版 Agent 时，最常见的冲动是：
 
 ```python
-agent = Agent(...)
-runner = Runner()
-runner.run(agent, ...)
+class Agent:
+    def run(self):
+        ...
 ```
 
-这意味着项目已经从“纯笔记”正式进入“可运行骨架”阶段。
+这节课最重要的作用，就是先把这种写法纠正掉。
+
+原因不是它“完全不能跑”，而是它从第一天就埋下了混乱边界。
+
+因为一旦 `Agent.run()` 同时承担：
+
+- 接收用户输入
+- 组装 messages
+- 调模型
+- 判断 Tool Call
+- 执行 Tool
+- 返回结果
+
+那它就不再是“Agent 定义”，而是变成了一个不断膨胀的 God Object。
+
+所以第一版必须先拆成两个角色：
+
+- `Agent`
+- `Runner`
+
+这一步非常关键，因为它决定了后面你看到 OpenAI Agents SDK、OpenHands、LangGraph 时，能不能一下子看懂它们为什么会这么分层。
 
 ---
 
-## 本节 Git Commit
+## `Agent` 在第一版里到底负责什么
 
-建议的提交信息：
+第一版 `Agent` 应该只保存最核心的静态配置。
 
-```text
-Initialize Agent Architecture
+例如：
+
+```python
+class Agent:
+    def __init__(self, llm, instructions, tools):
+        self.llm = llm
+        self.instructions = instructions
+        self.tools = tools
 ```
 
-这个 Commit 的意义不是功能完整，而是：
+这里最重要的不是字段有几个，而是职责非常收敛。
 
-> 确立了后续整个 Agent 项目的基础架构边界。
+第一版 `Agent` 的核心职责应该是：
+
+- 保存使用哪个 `llm`
+- 保存系统指令或 Prompt
+- 保存当前可用 Tools
+
+也就是说，`Agent` 回答的是：
+
+> 我是谁，我用什么模型能力，我有什么工具，我遵循什么指令
+
+所以它不应该负责：
+
+- `run()`
+- Loop
+- Tool 执行
+- Retry
+- Session
+- Memory
+- Logging
+- Tracing
+
+这不是因为这些能力不重要，而是因为它们现在不应该挤进 `Agent` 里。
+
+---
+
+## `Runner` 在第一版里到底负责什么
+
+真正运行 Agent 的，应该是 `Runner`。
+
+例如：
+
+```python
+class Runner:
+    def run(self, agent, user_input):
+        ...
+```
+
+这里一个很重要的设计信号是：
+
+```python
+run(agent, user_input)
+```
+
+而不是：
+
+```python
+self.agent.run(...)
+```
+
+这意味着 `Runner` 理论上可以运行多个不同的 Agent：
+
+- Code Agent
+- Review Agent
+- Search Agent
+
+所以 `Runner` 回答的问题是：
+
+> 一个 Agent 应该怎样被驱动起来
+
+第一版 `Runner` 暂时不需要完整实现所有循环细节，但至少要承担：
+
+- 接收用户输入
+- 驱动一次调用链入口
+- 串起 Agent 与 LLM
+- 为后续 Loop 留位置
+
+后面真正的：
+
+- Tool 判定
+- 多轮迭代
+- 事件流输出
+- `LLMResponse` 汇聚
+
+都应该长在 `Runner` 这一侧，而不是回流进 `Agent`。
+
+---
+
+## 为什么 `llm.py` 现在就必须出现
+
+这节课虽然还没有完全进入模型实现细节，但 `llm.py` 必须从第一版目录里出现。
+
+原因非常简单：
+
+如果这层不先立住，后面最容易退化成：
+
+```python
+client.responses.create(...)
+```
+
+到处散落在 Runner 或 Agent 里。
+
+一旦这样写，后面这些能力都会变难：
+
+- 切换模型供应商
+- 测试和 Mock
+- 输出协议统一
+- `LLMResponse` 落地
+- 多模型扩展
+
+所以第一版 `llm.py` 的意义，不是功能完整，而是先把抽象位置占住。
+
+例如：
+
+```python
+class BaseLLM:
+    def generate(self, messages, tools=None):
+        raise NotImplementedError
+```
+
+现在先不要求它完整，只要求它存在，并且让上层开始依赖：
+
+> `generate()` 这种统一能力
+
+而不是依赖某家 SDK。
+
+---
+
+## 为什么这一节还不急着把 `LLMResponse` 写进去
+
+你前面已经补了第十三、十四课，所以这里一个很自然的问题就是：
+
+> 既然都已经讲到 `LLMResponse` 了，为什么 Sprint1-Lesson1 不直接把它实现掉？
+
+答案是：这节课的任务还没到那一步。
+
+这一节最重要的是先把骨架摆对。
+
+因为如果现在连：
+
+- `Agent`
+- `Runner`
+- `BaseLLM`
+- Tool
+- Schema
+
+这些位置都还没立稳，就直接把 `LLMResponse` 写进来，往往只会让结构更乱。
+
+更合理的顺序应该是：
+
+### 这一节先完成
+
+- 目录结构
+- 职责边界
+- 类与模块的基本位置
+
+### 后续再逐步补齐
+
+- 真实的 `OpenAILLM`
+- 真正的 Agent Loop
+- Tool Calling 闭环
+- `LLMResponse`
+- `Event`
+- `Block`
+
+这说明：
+
+> 第十四课提供的是设计方向，而不是要求 Sprint1 第一课立刻把所有协议都实现完
+
+---
+
+## 本节项目结构的意义
+
+这节课完成后的最小项目结构如下：
+
+```text
+agent-from-scratch/
+├── app.py
+├── config.py
+├── llm.py
+├── agent.py
+├── runner.py
+├── tools.py
+├── schemas.py
+├── prompts.py
+└── requirements.txt
+```
+
+每个文件的意义应该非常清楚：
+
+- `app.py`：程序入口
+- `config.py`：配置管理
+- `llm.py`：模型能力边界
+- `agent.py`：Agent 定义
+- `runner.py`：运行时驱动
+- `tools.py`：工具实现
+- `schemas.py`：给 LLM 看的 Tool Schema
+- `prompts.py`：Prompt 资源
+
+这一节的关键不是每个文件都写很多代码，而是：
+
+> 以后这些职责不再需要临时找地方安放
+
+这就是骨架的价值。
+
+---
+
+## 这一节完成后，系统应该处于什么状态
+
+这一节结束后，项目不一定“功能完整”，但应该已经具备了三个非常重要的特征。
+
+### 1. 结构是清楚的
+
+你已经知道：
+
+- 配置放哪
+- Prompt 放哪
+- LLM 抽象放哪
+- Tool 放哪
+- Runner 放哪
+
+### 2. 后续扩展有位置
+
+你以后要加：
+
+- `OpenAILLM`
+- Loop
+- ToolManager
+- Session
+- `LLMResponse`
+
+都已经知道该往哪一层长。
+
+### 3. 不会轻易退化成大脚本
+
+这点很关键。
+
+真正糟糕的项目，往往不是一开始就错得很离谱，而是：
+
+> 第一版没有立边界，后面所有新增功能都只能继续往一个文件里塞
+
+这一节的意义，就是从第一天开始避免这种退化。
 
 ---
 
@@ -284,39 +404,54 @@ Initialize Agent Architecture
 
 ### 1.
 
-> Agent 是配置，不是执行器。
+> Agent 是配置，不是执行器
 
 ### 2.
 
-> Runner 才是真正驱动 Agent Loop 的地方。
+> Runner 才是真正驱动 Agent 生命周期的地方
 
 ### 3.
 
-> LLM 要先抽象，再接具体实现。
+> LLM 要先抽象，再接具体实现
+
+---
+
+## 本节 Git Commit
+
+建议提交信息：
+
+```text
+Initialize Agent Architecture
+```
+
+这个 Commit 的意义不是功能完整，而是：
+
+> 正式确立了整个 `agent-from-scratch` 项目的基础架构边界
 
 ---
 
 ## 下一步
 
-下一节将进入整个项目第一次真正调用模型的阶段：
+下一节最自然的推进方向，是继续把这套骨架接上真实的模型调用链。
+
+也就是说，后面会开始进入：
 
 - `BaseLLM`
 - `OpenAILLM`
 - `Responses API`
 
+等真正“让骨架开始工作”的阶段。
+
 到那时，项目会第一次形成：
 
 ```text
 Agent
-  ↓
-Runner
-  ↓
-BaseLLM
-  ↓
-OpenAILLM
-  ↓
-Responses API
+-> Runner
+-> BaseLLM
+-> OpenAILLM
+-> Responses API
 ```
 
-这会是整个 Agent Framework 最关键的一层抽象落地。
+也就是说，这一节不是在做功能高潮，而是在做：
 
+> 整个 Sprint1 最关键的起跑姿势
