@@ -48,6 +48,8 @@
 - LLM Interface 抽象
 - 为什么先理解 OpenAI Agents SDK
 - 100 行以内最小 Agent 视角
+- Agent 结构化输出与前端工作台意识
+- LLMResponse 与统一响应协议设计
 
 ### 阶段3：Sprint1
 
