@@ -1,5 +1,4 @@
-import json
-
+from schemas import Event
 from tools import TOOL_REGISTRY
 
 
@@ -25,24 +24,41 @@ class Runner:
 
         while True:
             response = agent.llm.generate(input_items, tools=agent.tools)
-            input_items.extend(response.output)
+            input_items.extend(response.raw_response.output)
+
+            if response.tool_calls:
+                response.events.extend(
+                    Event(
+                        type="tool_call",
+                        payload={
+                            "tool_name": tool_call.name,
+                            "arguments": tool_call.arguments,
+                        },
+                    )
+                    for tool_call in response.tool_calls
+                )
 
             tool_called = False
-            for item in response.output:
-                if item.type != "function_call":
-                    continue
-
-                arguments = json.loads(item.arguments)
-                result = self.execute_tool(item.name, arguments)
+            for tool_call in response.tool_calls:
+                result = self.execute_tool(tool_call.name, tool_call.arguments)
+                response.events.append(
+                    Event(
+                        type="tool_result",
+                        payload={
+                            "tool_name": tool_call.name,
+                            "result": str(result),
+                        },
+                    )
+                )
                 input_items.append(
                     {
                         "type": "function_call_output",
-                        "call_id": item.call_id,
+                        "call_id": tool_call.id,
                         "output": str(result),
                     }
                 )
                 tool_called = True
 
             if not tool_called:
-                print(response.output_text)
-                return response.output_text
+                print(response.content)
+                return response.content
