@@ -1,156 +1,56 @@
-﻿# Agent Engineer Learning Repository
+# Coding Agent Engineering Lab
 
-这个仓库现在已经从“零散课程笔记”收敛成一条更清晰的主线：
+这是一个用真实项目学习 Coding Agent 工程的仓库。课程不再以 56 节线性笔记为主，而是围绕 `agent-from-scratch` 的代码、测试、运行记录和答辩产物完成 8 个里程碑。
 
-> 用课程建立 Agent 工程认知，用项目把认知变成能力，用仓库把能力沉淀成作品。
+## 从这里开始
 
----
+1. 阅读 [课程首页](课程/README.md)，按 M01-M08 顺序学习。
+2. 进入 [agent-from-scratch](agent-from-scratch/README.md) 安装并运行项目。
+3. 每个里程碑执行 `课程.md` 中的验证命令。
+4. 使用对应 `验收与面试.md` 做代码讲解和设计答辩。
 
-## 先看哪里
+## 主项目能力
 
-如果你现在要开始学习，按这个顺序：
+- 标准 `src/` Python 包与可选 OpenAI Responses API 适配器。
+- 纯文本、单 Tool、多 Tool 和受控终止的 Agent Loop。
+- 限定工作区的读取、搜索、精确补丁和命令工具。
+- `LLMResponse`、`ToolResult`、`Event`、`RunResult` 分层协议。
+- Session、上下文预算、检查点恢复、Retry、Timeout 和 JSONL Trace。
+- 离线单元/契约/集成/E2E 测试与 20 个固定评测任务。
+- CLI 必修入口和最小只读 MCP 选修实验。
 
-1. `课程/课程治理/Agent课程总导航-重构版.md`
-2. `课程/课程治理/Agent课程总审计与重构版.md`
-3. `课程/阶段1-核心认知/`
-4. `课程/阶段2-项目过渡/`
-5. `课程/阶段3-Sprint1/`
-6. `课程/阶段4-工程化能力/`
-7. `agent-from-scratch/`
+## 快速验证
 
-其中：
+```powershell
+cd agent-from-scratch
+python -m pip install -e ".[dev,mcp]"
+python -m pytest -q
+python examples/offline_demo.py
+coding-agent-eval
+```
 
-- 总导航：告诉你怎么学
-- 总审计：告诉你为什么现在不再继续无上限扩课
-- `课程/`：负责系统化认知建立
-- `agent-from-scratch/`：负责把知识真正变成代码与工程能力
-
----
-
-## 当前阶段划分
-
-### 阶段1：核心认知
-
-重点建立：
-
-- Agent / Tool / Loop
-- Tool Calling 本质
-- Tool Schema
-- Responses API
-- 状态机与事件流
-- Runner 与 Agent Runtime
-
-### 阶段2：项目过渡
-
-重点建立：
-
-- Coding Agent 项目启动意识
-- LLM Interface 抽象
-- 为什么先理解 OpenAI Agents SDK
-- 100 行以内最小 Agent 视角
-- Agent 结构化输出与前端工作台意识
-- LLMResponse 与统一响应协议设计
-
-### 阶段3：Sprint1
-
-重点完成：
-
-- 最小 Agent 架构
-- 打通 LLM 调用链
-- 最小 Agent Loop
-- 多 Tool 支持
-- ToolManager 抽取
-- Prompt / Message 组织
-- Session 初版
-- 测试与错误处理初版
-
-### 阶段4：工程化能力
-
-重点扩展：
-
-- Logging / Tracing / Retry / Config
-- Token / 上下文 / 压缩 / 摘要
-- Memory / Session / 长任务稳定性
-- RAG / MCP / 多 Agent 前置能力
-
----
+真实模型运行需要自行设置 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，默认测试不访问网络或产生 API 费用。
 
 ## 仓库结构
 
 ```text
-课程/
-├── 课程治理/
-├── 阶段1-核心认知/
-├── 阶段2-项目过渡/
-├── 阶段3-Sprint1/
-└── 阶段4-工程化能力/
-
 agent-from-scratch/
+├── src/agent_from_scratch/   # 唯一运行时包
+├── tests/                    # 离线测试
+├── evals/                    # 20 个固定任务
+├── examples/                 # 无密钥示例
+└── pyproject.toml
+
+课程/
+├── 主线-Coding-Agent/        # M01-M08
+├── 选修专题/                 # Web、RAG、多 Agent
+├── 课程治理/                 # 规则与迁移映射
+├── 参考资料/
+└── 归档/2026-07-深度重构前/  # 56 节旧课与 56 份旧面试题
 ```
 
-### `课程/`
+## 历史与限制
 
-课程目录负责建立完整学习路径，包括：
+旧课程全部只读归档，完整去向见 [旧课迁移映射](课程/课程治理/旧课迁移映射.md)。仓库根部和 `agent-from-scratch/` 根部的旧 Python 脚本不是新主线入口；后者受本机企业 TSD/DLP 驱动影响，Git 读取会被替换成保护容器，因此在安全策略解除前不批量移动或重写，具体见 [Git 与 TSD 环境说明](课程/课程治理/Git与TSD环境说明.md)。当前正式实现只位于 `agent-from-scratch/src/agent_from_scratch/`。
 
-- 核心概念
-- 项目过渡
-- 从零实现最小 Agent
-- 工程化、RAG、MCP、多 Agent 前置能力
-
-### `agent-from-scratch/`
-
-这个目录应该逐步成为你的主项目载体。
-
-后续最重要的事情，不是再继续堆课程，而是把课程中的抽象真正落实到这里：
-
-- Agent
-- Runner
-- LLM Interface
-- Tool Manager
-- Session
-- Memory
-- Logging
-- Tracing
-- Retry
-- RAG
-- MCP
-- Multi-Agent 前置协议
-
----
-
-## 现在的默认学习方式
-
-从现在开始，默认不再继续线性生成“下一课”。
-
-默认学习方式改为：
-
-1. 按导航复习已有课程
-2. 在主项目中实现对应能力
-3. 做阶段性复盘
-4. 只在真实项目卡点上补新内容
-
-这意味着：
-
-> 课程是地图，项目是战场，仓库是作品集。
-
----
-
-## 当前目标
-
-当前最重要的目标不是继续扩课，而是：
-
-1. 把已有课程学透
-2. 把主项目跑起来
-3. 把主项目逐步工程化
-4. 把仓库收敛成一个长期可迭代的 Agent Engineer 学习与作品仓库
-
----
-
-## 最后一句
-
-如果你未来要面试 Agent 开发工程师，这个仓库最有价值的部分，不是“我写了多少课程”，而是：
-
-- 我为什么这样设计 Agent
-- 我如何从零实现最小 Agent
-- 我如何给 Agent 加 Logging / Tracing / Memory / RAG / MCP
-- 我如何把课程变成项目，把项目变成作品
+Web 工作台、RAG 和多 Agent 均为有进入条件的选修扩展，不能当作当前已交付能力。

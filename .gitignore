@@ -1,6 +1,11 @@
 agent_state.json
+.agent/
+.pytest_cache/
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+build/
+dist/
 .DS_Store
 .vscode/

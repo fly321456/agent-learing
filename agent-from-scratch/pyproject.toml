@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-from-scratch"
+version = "0.1.0"
+description = "A small, testable coding agent runtime built alongside the course."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=2,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+mcp = ["mcp>=1.27,<2"]
+
+[project.scripts]
+coding-agent = "agent_from_scratch.cli:main"
+coding-agent-eval = "agent_from_scratch.evaluation:main"
+coding-agent-mcp = "agent_from_scratch.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agent_from_scratch = ["data/*.json"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
+testpaths = ["tests"]
