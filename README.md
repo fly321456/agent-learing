@@ -1,25 +1,38 @@
-# Coding Agent Engineering Lab
+# Coding Agent Learning Lab
 
-这是一个用真实项目学习 Coding Agent 工程的仓库。课程不再以 56 节线性笔记为主，而是围绕 `agent-from-scratch` 的代码、测试、运行记录和答辩产物完成 8 个里程碑。
+这是一个面向 Python 开发者的 Agent 学习与项目仓库。学习者从一个单文件离线脚本开始，用 32 节循序渐进的课程理解 Agent、Tool Calling 和 Agent Loop，最终完成可安装、可测试、可评测并支持 MCP 的 Coding Agent。
 
 ## 从这里开始
 
-1. 阅读 [课程首页](课程/README.md)，按 M01-M08 顺序学习。
-2. 进入 [agent-from-scratch](agent-from-scratch/README.md) 安装并运行项目。
-3. 每个里程碑执行 `课程.md` 中的验证命令。
-4. 使用对应 `验收与面试.md` 做代码讲解和设计答辩。
+1. 打开 [32 节课程首页](课程/README.md)。
+2. 从 `agent-from-scratch/course-checkpoints/00-starter/` 创建个人学习副本。
+3. 每节课先画运行轨迹，再完成一个代码增量和验证。
+4. 每 4 课运行模块检查点，并完成模块项目验收与面试。
 
-## 主项目能力
+## 学习路线
 
-- 标准 `src/` Python 包与可选 OpenAI Responses API 适配器。
-- 纯文本、单 Tool、多 Tool 和受控终止的 Agent Loop。
-- 限定工作区的读取、搜索、精确补丁和命令工具。
-- `LLMResponse`、`ToolResult`、`Event`、`RunResult` 分层协议。
-- Session、上下文预算、检查点恢复、Retry、Timeout 和 JSONL Trace。
-- 离线单元/契约/集成/E2E 测试与 20 个固定评测任务。
-- CLI 必修入口和最小只读 MCP 选修实验。
+```text
+Agent 核心认知
+  -> LLM 与 Tool Calling
+  -> 从零实现 Agent Loop
+  -> Runtime 模块化重构
+  -> 安全 Coding Tools
+  -> Session、上下文与可靠性
+  -> 测试、评测与可观测性
+  -> CLI、MCP 与作品化
+```
 
-## 快速验证
+主线共 8 个模块、32 节课，预计 40–48 小时。MCP 是必修；RAG 和多 Agent 各有 4 节完整选修课。Web 工作台不属于当前主线。
+
+## 主项目
+
+[agent-from-scratch](agent-from-scratch/README.md) 同时提供三种代码视角：
+
+- `course-checkpoints/`：starter 和 8 个模块完成态，用于学习和恢复。
+- `.learning/current/`：被 Git 忽略的个人逐课练习目录。
+- `src/agent_from_scratch/`：最终工程参考答案和正式 Python 包。
+
+## 离线验证
 
 ```powershell
 cd agent-from-scratch
@@ -29,28 +42,9 @@ python examples/offline_demo.py
 coding-agent-eval
 ```
 
-真实模型运行需要自行设置 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，默认测试不访问网络或产生 API 费用。
+真实模型实验需要显式设置 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，不属于默认验收，也不会在离线测试中产生费用。
 
-## 仓库结构
+## 历史与安全
 
-```text
-agent-from-scratch/
-├── src/agent_from_scratch/   # 唯一运行时包
-├── tests/                    # 离线测试
-├── evals/                    # 20 个固定任务
-├── examples/                 # 无密钥示例
-└── pyproject.toml
+原 56 节课程、56 份面试题和项目里程碑版均无损归档，去向见 [历史课程到新主线映射](课程/课程治理/历史课程到新主线映射.md)。8 个旧根 Python 文件仍受企业 TSD/DLP 驱动影响，禁止用 `git add -A` 误提交保护容器；详见 [Git 与 TSD 环境说明](课程/课程治理/Git与TSD环境说明.md)。
 
-课程/
-├── 主线-Coding-Agent/        # M01-M08
-├── 选修专题/                 # Web、RAG、多 Agent
-├── 课程治理/                 # 规则与迁移映射
-├── 参考资料/
-└── 归档/2026-07-深度重构前/  # 56 节旧课与 56 份旧面试题
-```
-
-## 历史与限制
-
-旧课程全部只读归档，完整去向见 [旧课迁移映射](课程/课程治理/旧课迁移映射.md)。仓库根部和 `agent-from-scratch/` 根部的旧 Python 脚本不是新主线入口；后者受本机企业 TSD/DLP 驱动影响，Git 读取会被替换成保护容器，因此在安全策略解除前不批量移动或重写，具体见 [Git 与 TSD 环境说明](课程/课程治理/Git与TSD环境说明.md)。当前正式实现只位于 `agent-from-scratch/src/agent_from_scratch/`。
-
-Web 工作台、RAG 和多 Agent 均为有进入条件的选修扩展，不能当作当前已交付能力。

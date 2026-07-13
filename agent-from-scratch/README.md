@@ -1,6 +1,8 @@
 # agent-from-scratch
 
-一个小型、可检查、可离线测试的 Coding Agent Runtime，也是 M01-M08 课程的唯一主项目。
+一个小型、可检查、可离线测试的 Coding Agent Runtime，也是 8 模块 32 课深入浅出课程的唯一主项目。
+
+课程现已改为 8 模块 32 课的深入浅出教学主线。`course-checkpoints/` 提供 starter 和 8 个模块完成态；学习者在被忽略的 `.learning/current/` 中逐课实践，`src/agent_from_scratch/` 保留为最终工程参考答案。
 
 ## 当前能力
 

@@ -1,47 +1,56 @@
-# Coding Agent 项目课程
+# Coding Agent 深入浅出课程
 
-本目录是仓库唯一课程入口。主线不再按“下一课”无限扩展，而是以 `agent-from-scratch` 中可运行、可测试、可答辩的项目成果为完成标准。
+这是一条从零理解 Agent、亲手实现 Agent Loop，再逐步成长为工程化 Coding Agent 的连续学习路线。默认学习者已经掌握 Python 基础，但没有 Agent 开发经验。
 
-## 学习方式
+## 学习原则
 
-1. 阅读当前里程碑的 `课程.md`。
-2. 在 `agent-from-scratch/` 中完成或复核对应代码。
-3. 执行文档中的自动验证命令。
-4. 使用 `验收与面试.md` 做代码讲解、故障分析和设计答辩。
-5. 产物未通过验收前，不进入下一个里程碑。
+1. 先理解问题和运行轨迹，再写代码。
+2. 每课只增加一个主要概念和一个可验证增量。
+3. 每节 60–90 分钟，讲解约 40%，实践约 60%。
+4. 必修实验全部可离线完成，真实 Responses API 是选做实验。
+5. 不直接照抄最终 `src/`；从上一模块检查点复制到 `.learning/current/` 后跟课修改。
 
-## 八个主线里程碑
+## 32 节主线
 
-| 里程碑 | 课程 | 验收与面试 | 项目结果 |
+| 模块 | 课程范围 | 模块导学 | 项目结果 |
 | --- | --- | --- | --- |
-| M01 | [运行基线](主线-Coding-Agent/M01-运行基线/课程.md) | [验收](主线-Coding-Agent/M01-运行基线/验收与面试.md) | 标准 Python 包、LLM 抽象、离线测试 |
-| M02 | [Agent Loop](主线-Coding-Agent/M02-Agent-Loop/课程.md) | [验收](主线-Coding-Agent/M02-Agent-Loop/验收与面试.md) | 文本、单/多 Tool 与受控终止 |
-| M03 | [安全 Coding Tools](主线-Coding-Agent/M03-安全-Coding-Tools/课程.md) | [验收](主线-Coding-Agent/M03-安全-Coding-Tools/验收与面试.md) | 工作区工具、审批、越界与超时保护 |
-| M04 | [响应协议与事件流](主线-Coding-Agent/M04-响应协议与事件流/课程.md) | [验收](主线-Coding-Agent/M04-响应协议与事件流/验收与面试.md) | LLMResponse、ToolResult、RunResult、Event |
-| M05 | [Session 与上下文](主线-Coding-Agent/M05-Session与上下文/课程.md) | [验收](主线-Coding-Agent/M05-Session与上下文/验收与面试.md) | 会话、预算、检查点与恢复 |
-| M06 | [可靠性与可观测性](主线-Coding-Agent/M06-可靠性与可观测性/课程.md) | [验收](主线-Coding-Agent/M06-可靠性与可观测性/验收与面试.md) | Retry、Timeout、错误分类与 Trace |
-| M07 | [测试与评测](主线-Coding-Agent/M07-测试与评测/课程.md) | [验收](主线-Coding-Agent/M07-测试与评测/验收与面试.md) | 分层测试、20 题任务集与回归指标 |
-| M08 | [扩展与作品化](主线-Coding-Agent/M08-扩展与作品化/课程.md) | [验收](主线-Coding-Agent/M08-扩展与作品化/验收与面试.md) | CLI、最小 MCP、发布说明与扩展审计 |
+| 01 Agent 核心认知 | L01–L04 | [开始学习](主线-Coding-Agent/模块01-Agent核心认知/模块导学.md) | 离线演示 Think–Act–Observe |
+| 02 LLM 与 Tool Calling | L05–L08 | [开始学习](主线-Coding-Agent/模块02-LLM与Tool Calling/模块导学.md) | 完成一次单 Tool 固定往返 |
+| 03 从零实现 Agent Loop | L09–L12 | [开始学习](主线-Coding-Agent/模块03-从零实现Agent Loop/模块导学.md) | 得到单文件最小 Agent |
+| 04 Runtime 模块化重构 | L13–L16 | [开始学习](主线-Coding-Agent/模块04-Runtime模块化重构/模块导学.md) | 重构为标准 Runtime 包 |
+| 05 安全 Coding Tools | L17–L20 | [开始学习](主线-Coding-Agent/模块05-安全Coding Tools/模块导学.md) | 安全分析、修改和验证代码 |
+| 06 Session、上下文与可靠性 | L21–L24 | [开始学习](主线-Coding-Agent/模块06-Session上下文与可靠性/模块导学.md) | 会话、恢复和分级错误处理 |
+| 07 测试、评测与可观测性 | L25–L28 | [开始学习](主线-Coding-Agent/模块07-测试评测与可观测性/模块导学.md) | 离线测试、20 题评测与 Trace |
+| 08 CLI、MCP 与作品化 | L29–L32 | [开始学习](主线-Coding-Agent/模块08-CLI-MCP与作品化/模块导学.md) | 可安装、可演示的 Coding Agent |
 
-## 选修专题
+## 如何使用代码检查点
 
-- [响应协议与 Web 工作台契约](选修专题/响应协议与Web工作台契约.md)
-- [RAG 与外部知识实验](选修专题/RAG与外部知识实验.md)
-- [多 Agent 可拆分性审计](选修专题/多Agent可拆分性审计.md)
+```powershell
+cd agent-from-scratch
+New-Item -ItemType Directory -Path .learning -Force
+Copy-Item -Recurse -Force course-checkpoints/00-starter .learning/current
+cd .learning/current
+python demo.py
+```
 
-选修内容必须先满足进入条件。Web 不属于核心依赖；RAG 和多 Agent 不能只因技术热门而引入。
+模块完成后运行对应的 `course-checkpoints/01-...` 至 `08-...`，比较行为和代码边界。检查点是教学参考，不是正式包 API；最终答案仍位于 `src/agent_from_scratch/`。
+
+## 完整选修模块
+
+- [RAG 与外部知识](选修模块/RAG/模块导学.md)：4 课，从无 RAG 基线到检索评测。
+- [多 Agent 工程](选修模块/Multi-Agent/模块导学.md)：4 课，从可拆分性审计到最小 Reviewer 实验。
+
+完成 32 节主线和单 Agent 基线后再进入选修。
 
 ## 治理与历史
 
 - [课程架构与维护规则](课程治理/课程架构与维护规则.md)
-- [旧课迁移映射](课程治理/旧课迁移映射.md)
+- [历史课程到新主线映射](课程治理/历史课程到新主线映射.md)
 - [Git 与 TSD 环境说明](课程治理/Git与TSD环境说明.md)
-- [深度重构前归档](归档/2026-07-深度重构前/)
-- [历史参考资料](参考资料/)
+- [项目里程碑版归档](归档/2026-07-项目里程碑版/)
+- [更早的 56 节课程归档](归档/2026-07-深度重构前/)
 
-归档只读，不再维护第二套课程主线。发现历史内容与当前 API 冲突时，以新主线、项目测试和课程中标注的官方核验日期为准。
-
-## 一键验证
+## 最终验证
 
 ```powershell
 cd agent-from-scratch
