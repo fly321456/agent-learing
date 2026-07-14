@@ -10,18 +10,24 @@
 4. 必修实验全部可离线完成，真实 Responses API 是选做实验。
 5. 不直接照抄最终 `src/`；从上一模块检查点复制到 `.learning/current/` 后跟课修改。
 
+## 当前编写进度
+
+- **模块 1：教材精写完成。** L01–L04 已按“问题链 → 类比 → 概念推导 → 反例纠错 → 运行轨迹 → 完整代码 → 实验验证”重写，可作为正式学习材料。
+- **模块 2–8：课程大纲，待按模块 1 样板逐模块精写。** 现有文件用于确认知识顺序和项目增量，不应被视为已经完成的教材正文。
+- 后续不再批量生成课程正文；每个模块完成精写、代码步骤和质量测试后再更新状态。
+
 ## 32 节主线
 
-| 模块 | 课程范围 | 模块导学 | 项目结果 |
-| --- | --- | --- | --- |
-| 01 Agent 核心认知 | L01–L04 | [开始学习](主线-Coding-Agent/模块01-Agent核心认知/模块导学.md) | 离线演示 Think–Act–Observe |
-| 02 LLM 与 Tool Calling | L05–L08 | [开始学习](主线-Coding-Agent/模块02-LLM与Tool Calling/模块导学.md) | 完成一次单 Tool 固定往返 |
-| 03 从零实现 Agent Loop | L09–L12 | [开始学习](主线-Coding-Agent/模块03-从零实现Agent Loop/模块导学.md) | 得到单文件最小 Agent |
-| 04 Runtime 模块化重构 | L13–L16 | [开始学习](主线-Coding-Agent/模块04-Runtime模块化重构/模块导学.md) | 重构为标准 Runtime 包 |
-| 05 安全 Coding Tools | L17–L20 | [开始学习](主线-Coding-Agent/模块05-安全Coding Tools/模块导学.md) | 安全分析、修改和验证代码 |
-| 06 Session、上下文与可靠性 | L21–L24 | [开始学习](主线-Coding-Agent/模块06-Session上下文与可靠性/模块导学.md) | 会话、恢复和分级错误处理 |
-| 07 测试、评测与可观测性 | L25–L28 | [开始学习](主线-Coding-Agent/模块07-测试评测与可观测性/模块导学.md) | 离线测试、20 题评测与 Trace |
-| 08 CLI、MCP 与作品化 | L29–L32 | [开始学习](主线-Coding-Agent/模块08-CLI-MCP与作品化/模块导学.md) | 可安装、可演示的 Coding Agent |
+| 模块 | 课程范围 | 编写状态 | 模块导学 | 项目结果 |
+| --- | --- | --- | --- | --- |
+| 01 Agent 核心认知 | L01–L04 | **教材精写完成** | [开始学习](主线-Coding-Agent/模块01-Agent核心认知/模块导学.md) | 离线演示 Think–Act–Observe |
+| 02 LLM 与 Tool Calling | L05–L08 | 大纲待精写 | [查看大纲](主线-Coding-Agent/模块02-LLM与Tool Calling/模块导学.md) | 完成一次单 Tool 固定往返 |
+| 03 从零实现 Agent Loop | L09–L12 | 大纲待精写 | [查看大纲](主线-Coding-Agent/模块03-从零实现Agent Loop/模块导学.md) | 得到单文件最小 Agent |
+| 04 Runtime 模块化重构 | L13–L16 | 大纲待精写 | [查看大纲](主线-Coding-Agent/模块04-Runtime模块化重构/模块导学.md) | 重构为标准 Runtime 包 |
+| 05 安全 Coding Tools | L17–L20 | 大纲待精写 | [查看大纲](主线-Coding-Agent/模块05-安全Coding Tools/模块导学.md) | 安全分析、修改和验证代码 |
+| 06 Session、上下文与可靠性 | L21–L24 | 大纲待精写 | [查看大纲](主线-Coding-Agent/模块06-Session上下文与可靠性/模块导学.md) | 会话、恢复和分级错误处理 |
+| 07 测试、评测与可观测性 | L25–L28 | 大纲待精写 | [查看大纲](主线-Coding-Agent/模块07-测试评测与可观测性/模块导学.md) | 离线测试、20 题评测与 Trace |
+| 08 CLI、MCP 与作品化 | L29–L32 | 大纲待精写 | [查看大纲](主线-Coding-Agent/模块08-CLI-MCP与作品化/模块导学.md) | 可安装、可演示的 Coding Agent |
 
 ## 如何使用代码检查点
 

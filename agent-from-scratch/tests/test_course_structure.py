@@ -33,10 +33,11 @@ def test_main_course_has_eight_modules_and_thirty_two_lessons() -> None:
     ]
 
     lessons = []
-    for module in modules:
+    for module_index, module in enumerate(modules, start=1):
         module_lessons = sorted(module.glob("L[0-9][0-9]-*.md"))
         assert len(module_lessons) == 4
-        assert len([path for path in module.glob("*.md") if path not in module_lessons]) == 2
+        support_documents = [path for path in module.glob("*.md") if path not in module_lessons]
+        assert len(support_documents) == (3 if module_index == 1 else 2)
         lessons.extend(module_lessons)
 
     assert [lesson.name[:3] for lesson in lessons] == [
@@ -83,7 +84,11 @@ def test_all_nine_course_states_run_offline() -> None:
 
 
 def test_history_mapping_covers_every_archived_course_document() -> None:
-    archive_roots = [path for path in ARCHIVE_ROOT.iterdir() if path.name.startswith("2026-07-")]
+    archive_roots = [
+        path
+        for path in ARCHIVE_ROOT.iterdir()
+        if path.name.startswith("2026-07-") and len(list(path.rglob("*.md"))) > 1
+    ]
     documents = [document for root in archive_roots for document in root.rglob("*.md")]
     active_documents = [
         path

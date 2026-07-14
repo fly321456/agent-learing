@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from agent_core import ScriptedLLM, run_agent
+from pathlib import Path
+import sys
+
+
+CHECKPOINT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(CHECKPOINT))
+
+from agent_core import ScriptedLLM, run_agent  # noqa: E402
 
 
 REPOSITORY = {
@@ -19,7 +26,20 @@ def list_files() -> list[str]:
     return sorted(REPOSITORY)
 
 
-def main() -> None:
+def print_trace(task: str, result: dict) -> None:
+    print(f"Task: {task}")
+    for item in result["trace"]:
+        print(f"Step {item['step']} Decision: {item['decision']}")
+        if "action" in item:
+            print(f"Step {item['step']} Action: {item['action']}")
+        if "observation" in item:
+            print(f"Step {item['step']} Observation: {item['observation']}")
+        if "finish" in item:
+            print(f"Step {item['step']} Finish: {item['finish']}")
+    print(f"finish_reason: {result['finish_reason']}")
+
+
+if __name__ == "__main__":
     task = "Find the project entry point even when README.md is missing"
     llm = ScriptedLLM(
         [
@@ -34,18 +54,5 @@ def main() -> None:
         tools={"read_file": read_file, "list_files": list_files},
         max_steps=5,
     )
+    print_trace(task, result)
 
-    print(f"Task: {task}")
-    for item in result["trace"]:
-        print(f"Step {item['step']} Decision: {item['decision']}")
-        if "action" in item:
-            print(f"Step {item['step']} Action: {item['action']}")
-        if "observation" in item:
-            print(f"Step {item['step']} Observation: {item['observation']}")
-        if "finish" in item:
-            print(f"Step {item['step']} Finish: {item['finish']}")
-    print(f"finish_reason: {result['finish_reason']}")
-
-
-if __name__ == "__main__":
-    main()
