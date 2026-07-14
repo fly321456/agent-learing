@@ -1,95 +1,139 @@
-# L30 MCP到底标准化什么
+# L30 MCP 到底标准化什么：连接能力，不替你实现 Agent
 
-> 建议时长：60–90 分钟｜讲解 40%｜实践 60%
+> 建议学习时间：60–90 分钟。最后核验日期：2026-07-14；依据官方 MCP Python SDK v1.x 文档。
 
 ## 1. 本节要解决的真实问题
 
-MCP 与本地 ToolManager 是替代关系吗？
+项目已有 ToolSpec 和 ToolManager，为什么还需要 MCP（Model Context Protocol，模型上下文协议）？常见宣传把 MCP 描述成“装上就拥有 Agent”或“所有工具自动安全”。这会混淆两层：MCP 让客户端以统一方式发现和调用外部能力；Agent Runtime 仍负责目标、决策、循环、审批、Context、终止和结果。
 
-学习完成后，你不仅要记住结论，还要能在运行轨迹和代码中指出它发生在哪里。
+本课不急着写 Server，先回答协议边界。问题链是：MCP Client 与 Server 分别是谁？Tool Schema 如何被发现？stdio 是什么？MCP 是否决定模型何时调用 Tool？远程 Server 的结果可信吗？审批应放在客户端、服务端还是两边？
 
-## 2. 前置知识回顾
+## 2. 没有 MCP 时的集成成本
 
-回顾上一课形成的执行链，先写出你认为本节修改前程序缺少的能力。不要先看最终工程代码。
+```text
+Agent A → custom Python function
+Agent B → custom HTTP wrapper
+IDE C   → another plugin format
+```
 
-## 3. 场景与类比
+每个宿主都要重新定义工具名称、参数、调用和结果。MCP 提供统一 Client–Server 协议，使 Server 可以公开 Tools、Resources、Prompts 等能力，客户端通过协商和消息调用。
 
-把 Coding Agent 想成一名受约束的开发者：它需要知道目标、选择动作、使用工具获得事实，再根据事实继续工作。MCP 与本地 ToolManager 是替代关系吗？ 这正是本节要补齐的环节。
+它标准化连接方式，不保证每个 Tool 设计优秀，也不保证返回事实正确。
 
-## 4. 概念图与手工轨迹
+## 3. 一致类比与两个案例
 
-~~~text
-User Task -> Decide -> Act -> Observe -> Decide Again -> Finish
-~~~
+MCP 像 USB 接口：插头、电气协议和设备发现统一，但 USB 不决定用户何时打印、不审查文档内容，也不保证设备无恶意。
 
-先手工写一条输入、动作、观察和下一步，再运行代码验证你的预测。
+案例一：只读仓库 Server 暴露 `read_workspace_file` 与 `search_workspace`。不同 MCP Client 都能发现相同名称和参数。案例二：一个天气 Server 返回错误温度，协议调用仍可能“成功”；MCP 成功表示通信和 Tool 执行完成，不表示业务事实正确。
 
-## 5. 本节唯一核心概念
+第三个安全案例：Server 声称 Tool 叫 `read_file`，实际有副作用。客户端必须把远端描述视为不可信输入，服务端也必须自己执行权限边界。
 
-MCP 标准化工具发现与调用传输；业务工具、安全边界和 Runtime 仍由应用负责。
+## 4. MCP 标准化的内容
 
-本节先把这一件事做正确，不提前加入后续模块的抽象。
+```text
+能力发现：有哪些 Tools / Resources / Prompts
+Schema：Tool 名称、描述、输入结构
+调用：客户端如何发请求、服务端如何返回结果或错误
+Transport：stdio、Streamable HTTP 等消息承载
+Lifecycle：初始化、能力协商和会话通信
+```
 
-## 6. 本节代码增量
+本课程只实现 Tool Server 的最小子集。Resources 与 Prompts 值得后续扩展，但不应为了展示术语一次全加。
 
-修改目标：**画出 MCP Client、Server 与 Tool 的边界**。
+官方 Python SDK v1.x 提供 `FastMCP` 简化 Server 声明，v2 在当前核验时仍未稳定，因此项目依赖保留 `mcp>=1.27,<2`。
 
-~~~python
-# before: 程序还不能表达本节能力
-# after: 只加入本节所需的最小状态与行为
-~~~
+## 5. MCP 不标准化的内容
 
-从上一检查点复制代码到 .learning/current/，只完成上述增量。
+```text
+Agent 目标和 Instructions
+何时选择哪个 Tool
+Agent Loop 与 max_steps
+业务成功判定
+工作区授权和人工审批策略
+Session / Checkpoint / Retry
+工具内容真实性与安全性
+```
 
-## 7. 关键代码解释
+这些仍属于 Runtime 和应用。把 Tool 接入 MCP 后，原有 ToolManager 的边界不会自动消失；只是调用从本地函数变为协议请求。
 
-阅读代码时依次回答：输入从哪里来、谁做决定、谁执行动作、结果保存在哪里、什么条件结束。任何无法回答的问题都应先通过打印轨迹或测试验证，而不是靠猜测。
+## 6. stdio Transport 的运行模型
 
-## 8. 运行与预期输出
+stdio 模式通常由 Client 启动 Server 子进程，通过标准输入/输出交换协议消息。Server 的 stdout 属于协议通道，不能随意 `print("debug")`，否则可能破坏消息；诊断应写 stderr 或使用协议 Logging。
 
-~~~powershell
-cd agent-from-scratch/.learning/current
-python demo.py
-~~~
+```text
+Client process
+  ├─ starts: python -m course_product
+  ├─ writes MCP messages → server stdin
+  └─ reads MCP messages  ← server stdout
+```
 
-预期关键输出：
+stdio 适合本地工具和最小作品。远程部署可用 Streamable HTTP，但会增加认证、网络暴露和部署治理，本课程不把它当必修。
 
-~~~text
-mcp_transport=stdio
-~~~
+## 7. 两个错误直觉与纠正
 
-## 9. 常见错误与排障
+### 误区一：MCP Server 就是一个 Agent
 
-- 一次加入多个后续能力，导致无法判断哪一步出错。
-- 只看最终文字，没有检查动作、观察和结束条件。
-- 运行目录错误，实际执行了最终参考项目而不是学习副本。
+Server 提供能力，不负责围绕用户目标多轮决策。Agent Client 可以调用它，普通程序也可以调用它。没有 Loop 的 Server 仍是 MCP Server，不是 Agent。
 
-排障顺序：确认输入 -> 打印本轮状态 -> 检查动作结果 -> 检查终止条件。
+### 误区二：接入 MCP 后 Tool 自动安全
 
-## 10. 实践任务
+协议不替应用定义 Workspace、审批和数据脱敏。Server 必须执行自己的访问边界，Client 也应根据风险确认调用。双边防护并不重复，因为两边信任域不同。
 
-基础实验：完成“画出 MCP Client、Server 与 Tool 的边界”，并保存一段真实运行输出。
+另一个误区是 MCP 取代内部 ToolSpec。客户端适配器仍需把远端 Tool Schema 转换为 Runtime 可消费的形式，并把结果标准化为 ToolResult。
 
-进阶挑战：更换一个输入或失败条件，预测轨迹后再运行验证。
+## 8. 一次 Tool 调用轨迹
 
-## 11. 自测问题
+```text
+Client initialize → Server capabilities
+Client list_tools
+Server returns read_workspace_file(path,start_line,end_line)
+Agent Runtime chooses Tool
+Client call_tool(arguments={path:"README.md"})
+Server validates Workspace and reads UTF-8
+Server returns text result
+Client converts result to Observation / ToolResult
+Runner continues Loop
+```
 
-1. MCP 与本地 ToolManager 是替代关系吗？
-2. 本节概念在执行轨迹的哪一步出现？
-3. 如果删除本节代码，用户会观察到什么差异？
-4. 本节能力为什么不能只依赖 Prompt 保证？
-5. 你会用哪个最小测试证明实现正确？
+协议每一步成功仍不能证明最终 Task 完成；完成由 RunResult 和评测判定。
 
-## 12. 总结与衔接
+## 9. MCP 与课程 Runtime 的映射
 
-用三句话复述：本节问题、核心概念、代码变化。下一课：L31 用FastMCP暴露只读工具
+本地 ToolSpec 的 name/description/parameters 对应远端 Tool Schema；ToolManager.execute 可扩展为 MCP Client 调用；ToolResult 保存成功、错误、拒绝或超时；Event 记录远程调用顺序。
 
-## 学习导航
+```text
+MCP Tool result → adapter normalization → ToolResult → Event → next LLM call
+```
 
-- [课程首页](../../README.md)
-- 模块检查点：agent-from-scratch/course-checkpoints/08-cli-mcp-final/
+不要让 Runner 直接处理 MCP SDK 原始对象，这与 L14 禁止读取供应商 raw response 是同一架构原则：外部协议在适配层结束。
 
-## 官方核验
+## 10. 运行、预期输出与故障实验
 
-- 最后核验日期：2026-07-13
-- [Model Context Protocol](https://modelcontextprotocol.io/)
+```powershell
+python agent-from-scratch/course-checkpoints/08-cli-mcp-final/steps/l30_mcp_boundaries.py
+```
+
+```text
+mcp_standardizes=discovery,schemas,invocation,results,transports
+mcp_does_not_standardize=agent_policy,approval,task_success
+```
+
+故障实验：把 Server stdout 加一条普通 print，分析 stdio 风险；假设远端 Tool 描述错误，列出客户端防护；把 max_steps 误放进 Server，讨论多客户端为何冲突；比较本地 Tool exception 与 MCP error 的标准化位置。
+
+## 11. 基础练习与进阶挑战
+
+基础练习：画出 Runtime、MCP Client、MCP Server、Workspace 四层图，并标注信任边界。进阶挑战：设计一个 MCP Tool Adapter 接口，只写输入输出契约，不真正联网；说明 cancellation、timeout 和 approval 放在哪里。
+
+答案见 [模块练习参考答案](模块练习参考答案.md)。
+
+## 12. 自测、总结与下一课
+
+1. MCP 标准化哪些连接问题？
+2. MCP 为什么不等于 Agent Runtime？
+3. stdio Server 为什么不能随意写 stdout？
+4. Tool 安全为何需要客户端和服务端共同负责？
+5. MCP SDK 原始结果为什么应停在 Adapter？
+
+下一课 [L31 用 FastMCP 暴露只读工具](L31-用FastMCP暴露只读工具.md) 将按这条边界实现最小 Server，并用 SDK 自省证明只有两个只读 Tool。
+
+官方来源：[MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)。

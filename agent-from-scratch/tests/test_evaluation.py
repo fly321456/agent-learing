@@ -1,6 +1,8 @@
 import json
 from importlib.resources import files
 from pathlib import Path
+import subprocess
+import sys
 
 from agent_from_scratch.evaluation import (
     load_cases,
@@ -61,3 +63,20 @@ def test_offline_protocol_eval_runs_all_twenty_tool_sequences():
     assert summary["tool_calls"] == 25
     assert summary["steps"] == 40
     assert summary["failures"] == {}
+
+
+def test_evaluation_module_command_prints_computed_summary():
+    completed = subprocess.run(
+        [sys.executable, "-m", "agent_from_scratch.evaluation"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="strict",
+        timeout=20,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert payload["valid_cases"] == 20
+    assert payload["summary"]["passed"] == 20

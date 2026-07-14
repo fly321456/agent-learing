@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "course-product"
+version = "0.1.0"
+description = "Module 8 offline CLI and read-only MCP teaching checkpoint."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.27,<2"]
+
+[project.scripts]
+course-product-mcp = "course_product.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

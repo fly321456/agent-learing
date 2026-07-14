@@ -1,90 +1,144 @@
-# L24 Config、错误、Retry与Timeout
+# L24 Config、错误、Retry 与 Timeout：不是所有失败都值得再试一次
 
-> 建议时长：60–90 分钟｜讲解 40%｜实践 60%
+> 建议学习时间：60–90 分钟。本课完成模块 6，建立配置校验和分类重试。
 
 ## 1. 本节要解决的真实问题
 
-为什么不能遇到所有异常都重试？
+真实模型调用会遇到网络中断、限流、服务端错误，也会遇到非法参数、认证失败和无法解析的响应。若 Runner 对所有 Exception 都重试三次，确定性错误只会重复费用和延迟；若完全不重试，短暂网络抖动又让长任务轻易失败。
 
-学习完成后，你不仅要记住结论，还要能在运行轨迹和代码中指出它发生在哪里。
+本课建立 Error Taxonomy（错误分类）与 Retry Policy：只有明确标记为 Retryable 的暂时性错误进入有限指数退避；Deterministic 错误立即上抛或结束 Run。Attempts、Context 预算和 max_steps 由经过校验的 Config 提供，不在代码各处读取环境变量。
 
-## 2. 前置知识回顾
+## 2. 配置为什么也是可靠性边界
 
-回顾上一课形成的执行链，先写出你认为本节修改前程序缺少的能力。不要先看最终工程代码。
+```text
+Environment strings
+  → parse once
+  → RuntimeConfig validation
+  → explicit objects passed to Runner/Context
+```
 
-## 3. 场景与类比
+`AGENT_MAX_STEPS=0`、负 Timeout、非整数 Retry 次数都应在启动时失败，而不是运行到关键步骤才表现异常。配置与运行状态分开：retry_attempts 是策略，当前 attempt 是一次调用状态。
 
-把 Coding Agent 想成一名受约束的开发者：它需要知道目标、选择动作、使用工具获得事实，再根据事实继续工作。为什么不能遇到所有异常都重试？ 这正是本节要补齐的环节。
+教学版从 Mapping 读取，测试无需污染真实环境；应用入口可以传 `os.environ`。
 
-## 4. 概念图与手工轨迹
+## 3. 两类错误与具体案例
 
-~~~text
-User Task -> Decide -> Act -> Observe -> Decide Again -> Finish
-~~~
+Retryable：临时连接失败、429 限流、部分 5xx、短暂超时。重试可能在不修改请求的情况下成功。
 
-先手工写一条输入、动作、观察和下一步，再运行代码验证你的预测。
+Deterministic：API Key 无效、模型名不存在、Tool 参数 JSON 非法、响应协议缺字段。相同输入原样重试大概率仍失败，需要改配置、代码或上下文。
 
-## 5. 本节唯一核心概念
+案例一：第一次模型调用抛 `RetryableError("temporary")`，第二次返回 recovered，记录一次 retry Event。案例二：抛 `DeterministicError("invalid response")`，即使策略 attempts=3，也只调用一次。
 
-配置、协议、暂时性模型错误和工具错误策略不同；只重试明确可恢复错误并设置上限。
+## 4. RuntimeConfig 的最小实现
 
-本节先把这一件事做正确，不提前加入后续模块的抽象。
+```python
+@dataclass(frozen=True)
+class RuntimeConfig:
+    max_steps: int = 8
+    context_chars: int = 40_000
+    retry_attempts: int = 2
+```
 
-## 6. 本节代码增量
+`from_mapping()` 负责字符串到整数转换，`__post_init__()` 负责正数约束。模型名不在教学 Config 中，因为本模块完全离线；正式应用还应显式要求 `OPENAI_MODEL`，不把某个模型名写成永久默认。
 
-修改目标：**加入 RuntimeConfig 和 RetryPolicy**。
+Config 不应成为全局 mutable 字典。显式 dataclass 让类型、默认值和校验集中，并可直接注入测试。
 
-~~~python
-# before: 程序还不能表达本节能力
-# after: 只加入本节所需的最小状态与行为
-~~~
+## 5. 本课唯一代码增量：RetryPolicy
 
-从上一检查点复制代码到 .learning/current/，只完成上述增量。
+```python
+for attempt in range(1, attempts + 1):
+    try:
+        return operation()
+    except RetryableError as exc:
+        if attempt >= attempts:
+            raise
+        emit_retry(attempt, exc)
+        sleep(base_delay * 2 ** (attempt - 1))
+```
 
-## 7. 关键代码解释
+except 只捕获 RetryableError，因此 DeterministicError 和编程错误自然退出。最后一次失败必须重新 raise，不能跌出循环返回 None。`attempts` 表示总尝试次数，不是“额外重试次数”，文档与配置必须一致。
 
-阅读代码时依次回答：输入从哪里来、谁做决定、谁执行动作、结果保存在哪里、什么条件结束。任何无法回答的问题都应先通过打印轨迹或测试验证，而不是靠猜测。
+## 6. Backoff、Timeout 与预算
 
-## 8. 运行与预期输出
+指数退避让连续请求间隔增长，避免服务异常时同步轰炸。生产系统通常再加 jitter，减少多个客户端同一时刻重试。教学测试用 base_delay=0，保持快速确定。
 
-~~~powershell
-cd agent-from-scratch/.learning/current
-python demo.py
-~~~
+Timeout 是每次 attempt 的时间边界，Retry 是跨 attempt 的策略，max_steps 是 Agent Loop 的决策预算，三者不能混用：
 
-预期关键输出：
+```text
+request timeout → one model attempt stopped
+retry attempts  → how many temporary attempts
+max_steps       → how many model decisions in one Run
+```
 
-~~~text
-attempts=2 recovered=true
-~~~
+总时长还应有 Run deadline，否则每步多次 Retry 会放大整体延迟。
 
-## 9. 常见错误与排障
+## 7. 两个错误直觉与纠正
 
-- 一次加入多个后续能力，导致无法判断哪一步出错。
-- 只看最终文字，没有检查动作、观察和结束条件。
-- 运行目录错误，实际执行了最终参考项目而不是学习副本。
+### 误区一：捕获 Exception 最稳妥
 
-排障顺序：确认输入 -> 打印本轮状态 -> 检查动作结果 -> 检查终止条件。
+它会吞掉代码 Bug、配置错误和确定性协议错误，使系统反复执行错误路径。只捕获你能采取明确恢复动作的异常。
 
-## 10. 实践任务
+### 误区二：Retry 能提高所有任务成功率
 
-基础实验：完成“加入 RuntimeConfig 和 RetryPolicy”，并保存一段真实运行输出。
+Retry 只对暂时性失败有效，还会增加延迟、费用和重复副作用风险。模型调用相对易重试；Tool 副作用必须先确认幂等。
 
-进阶挑战：更换一个输入或失败条件，预测轨迹后再运行验证。
+另一个误区是 Retry 不需要 Event。没有 attempt、错误和延迟记录时，用户只看到“很慢”，工程师不知道请求重试了几次。
 
-## 11. 自测问题
+## 8. 完整成功与失败轨迹
 
-1. 为什么不能遇到所有异常都重试？
-2. 本节概念在执行轨迹的哪一步出现？
-3. 如果删除本节代码，用户会观察到什么差异？
-4. 本节能力为什么不能只依赖 Prompt 保证？
-5. 你会用哪个最小测试证明实现正确？
+```text
+Policy attempts=2 base_delay=0
+attempt 1 → RetryableError temporary
+emit {type: retry, attempt: 1, error: temporary}
+attempt 2 → "recovered"
+return recovered
 
-## 12. 总结与衔接
+Policy attempts=3
+attempt 1 → DeterministicError invalid response
+not caught → stop immediately
+actual calls=1
+```
 
-用三句话复述：本节问题、核心概念、代码变化。下一步：完成模块验收与代码答辩。
+若两次都 Retryable，第二次异常原样抛出，由 Runner 记录 llm_failed 和 Run error。
 
-## 学习导航
+## 9. 错误分类责任
 
-- [课程首页](../../README.md)
-- 模块检查点：agent-from-scratch/course-checkpoints/06-session-reliability/
+Provider adapter 最了解 HTTP 状态和 SDK 异常，应把它们翻译为内部 Retryable 或 Deterministic LLM Error。Runner 不应通过错误消息字符串包含“429”来猜测。ToolManager 则负责 denied、timeout、error 等 Tool Result。
+
+```python
+if status == 429 or status >= 500:
+    raise RetryableError(...)
+raise DeterministicError(...)
+```
+
+分类可能不完美，因此模块 7 要统计重试后成功率和错误分布，用证据调整策略。
+
+## 10. 运行、预期输出与故障实验
+
+```powershell
+python agent-from-scratch/course-checkpoints/06-session-reliability/steps/l24_retry_config.py
+cd agent-from-scratch
+python -m pytest -q tests/test_course_module6.py
+```
+
+```text
+attempts=2 result=recovered max_steps=8
+```
+
+故障实验：把配置设为 0 或非整数；让两次都暂时失败；抛 DeterministicError 检查调用数；把 except 改成 Exception 观察错误重试；使用非零 base_delay 记录总耗时。
+
+## 11. 基础练习与进阶挑战
+
+基础练习：收集 retry Events，并断言 attempt 从 1 开始。进阶挑战：增加可注入 `sleep_fn` 与确定性 jitter，避免测试真实等待；再设计 Run deadline 如何与单次 Timeout 协作。
+
+答案见 [模块练习参考答案](模块练习参考答案.md)。
+
+## 12. 自测、总结与下一模块
+
+1. Retryable 与 Deterministic 错误依据是什么？
+2. 为什么 RetryPolicy 不捕获所有 Exception？
+3. attempts=2 表示调用几次？
+4. Timeout、Retry、max_steps 分别限制什么？
+5. 为什么错误分类应主要发生在 Provider adapter？
+
+模块 6 已形成可保存、可裁剪、可恢复、可分类失败的 Runtime 基础。下一模块从 [L25 FakeLLM 与单元测试](../模块07-测试评测与可观测性/L25-FakeLLM与单元测试.md) 开始，用系统测试和评测证明这些协议长期稳定。

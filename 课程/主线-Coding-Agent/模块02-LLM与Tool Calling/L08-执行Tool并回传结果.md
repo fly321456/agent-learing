@@ -1,96 +1,145 @@
-# L08 执行Tool并回传结果
+# L08 执行 Tool 并回传结果：完成第一次模型—程序往返
 
-> 建议时长：60–90 分钟｜讲解 40%｜实践 60%
+> 建议学习时间：60–90 分钟。本课完成固定两次调用；`while` Agent Loop 留到模块 3。
 
 ## 1. 本节要解决的真实问题
 
-Python 执行结果怎样回到模型？
+模型已返回 `function_call`，但它还不知道函数结果。应用必须执行处理器，把结果包装成 `function_call_output`，使用原 `call_id` 回传，并再次调用模型获得最终自然语言回答。
 
-学习完成后，你不仅要记住结论，还要能在运行轨迹和代码中指出它发生在哪里。
+最容易犯的错误是只发送工具结果、丢掉模型原始 output item。对于需要保留的推理或调用项目，下一次 input 应先追加 `response.output`，再追加工具输出。另一个错误是重新生成 call ID，导致模型无法对应请求与结果。
 
-## 2. 前置知识回顾
+## 2. 前置回顾与问题链
 
-回顾上一课形成的执行链，先写出你认为本节修改前程序缺少的能力。不要先看最终工程代码。
+```mermaid
+flowchart LR
+    U["User input"] --> M1["Model call 1"]
+    M1 --> FC["function_call"]
+    FC --> P["Python handler"]
+    P --> FO["function_call_output"]
+    FO --> M2["Model call 2"]
+    M2 --> A["Final answer"]
+```
 
-## 3. 场景与类比
+为什么需要第二次调用？因为 Python 只产生事实，不负责面向用户组织回答。为什么回传字符串？官方协议允许普通文本或 JSON 字符串，模型再解释其含义。
 
-把 Coding Agent 想成一名受约束的开发者：它需要知道目标、选择动作、使用工具获得事实，再根据事实继续工作。Python 执行结果怎样回到模型？ 这正是本节要补齐的环节。
+## 3. 数据流的三个不可丢失项
 
-## 4. 概念图与手工轨迹
+第一是原始模型 output item，它表达模型请求了什么；第二是 `call_id`，关联请求与结果；第三是工具的成功或错误文本。只保留最终答案会失去审计证据，只保留工具结果则模型不知道它对应哪次调用。
 
-~~~text
-User Task -> Decide -> Act -> Observe -> Decide Again -> Finish
-~~~
+```python
+input_items.extend(first.output)
+input_items.append({
+    "type": "function_call_output",
+    "call_id": item.call_id,
+    "output": output,
+})
+```
 
-先手工写一条输入、动作、观察和下一步，再运行代码验证你的预测。
+## 4. 案例一：工具成功
 
-## 5. 本节唯一核心概念
+`get_current_time()` 返回固定时间 `2026-07-14T09:30:00+08:00`。第二次请求包含 user message、原 function call、function call output。模型最后回答“The current time is 09:30”。固定时间避免测试因运行时刻变化而不稳定。
 
-Runtime 用 call_id 关联 function_call 与 function_call_output，再发起下一次模型调用获得最终回答。
+## 5. 案例二：参数损坏与未知工具
 
-本节先把这一件事做正确，不提前加入后续模块的抽象。
+若 arguments 是非法 `{`，程序不能执行 handler。它产生 `error: invalid JSON arguments` 并仍以同一个 call ID 回传，让模型能够向用户解释失败。若名称不存在，则回传 `error: unknown tool`。错误也是 Observation，不能假装空结果。
 
-## 6. 本节代码增量
+当前两次调用结构有局限：如果第二次响应又请求工具，函数不会继续执行。这个局限正是 L09 引入 `while` 的理由。
 
-修改目标：**完成固定两次模型调用的单 Tool 往返**。
+## 6. 错误直觉与反例
 
-~~~python
-# before: 程序还不能表达本节能力
-# after: 只加入本节所需的最小状态与行为
-~~~
+### 误区一：工具成功就可以直接把输出给用户
 
-从上一检查点复制代码到 .learning/current/，只完成上述增量。
+有时可以，但 Agent 协议还需要模型综合多个结果、解释格式和回答原任务。工具输出与最终回答是不同层次。
 
-## 7. 关键代码解释
+### 误区二：第二次只发送 function_call_output
 
-阅读代码时依次回答：输入从哪里来、谁做决定、谁执行动作、结果保存在哪里、什么条件结束。任何无法回答的问题都应先通过打印轨迹或测试验证，而不是靠猜测。
+缺少原始 function call 会破坏上下文链。代码先 `extend(first.output)`，再追加结果。
 
-## 8. 运行与预期输出
+### 误区三：异常应该直接吞掉
 
-~~~powershell
-cd agent-from-scratch/.learning/current
-python demo.py
-~~~
+吞掉后模型只看到没有结果，无法调整。结构化错误文本使失败可观察，但敏感堆栈不应直接泄露。
 
-预期关键输出：
+## 7. 完整运行轨迹
 
-~~~text
-final: current time received
-~~~
+```text
+Request 1 input: user asks current time
+Response 1 output: function_call(call-08, get_current_time, {})
+Python action: get_current_time()
+Tool result: 2026-07-14T09:30:00+08:00
+Request 2 input[1]: original function_call
+Request 2 input[2]: function_call_output(call-08, result)
+Response 2 output_text: The current time is 09:30 in Asia/Shanghai.
+Finish: fixed round trip completed
+```
 
-## 9. 常见错误与排障
+## 8. 完整代码
 
-- 一次加入多个后续能力，导致无法判断哪一步出错。
-- 只看最终文字，没有检查动作、观察和结束条件。
-- 运行目录错误，实际执行了最终参考项目而不是学习副本。
+核心位于 [responses_core.py](../../../agent-from-scratch/course-checkpoints/02-tool-calling/responses_core.py)，场景位于 [l08_execute_and_return_tool_output.py](../../../agent-from-scratch/course-checkpoints/02-tool-calling/steps/l08_execute_and_return_tool_output.py)。
 
-排障顺序：确认输入 -> 打印本轮状态 -> 检查动作结果 -> 检查终止条件。
+```python
+def run_fixed_tool_round_trip(client, *, model, user_input, tool_handlers):
+    input_items = [{"role": "user", "content": user_input}]
+    first = client.create(model=model, input=input_items, tools=[time_tool_schema()])
+    input_items.extend(first.output)
+    tool_outputs = []
 
-## 10. 实践任务
+    for item in first.output:
+        if item.type != "function_call":
+            continue
+        try:
+            arguments = json.loads(item.arguments)
+            handler = tool_handlers[item.name]
+            output = str(handler(**arguments))
+        except json.JSONDecodeError as error:
+            output = f"error: invalid JSON arguments: {error.msg}"
+        except KeyError:
+            output = f"error: unknown tool: {item.name}"
+        tool_output = {
+            "type": "function_call_output",
+            "call_id": item.call_id,
+            "output": output,
+        }
+        input_items.append(tool_output)
+        tool_outputs.append(tool_output)
 
-基础实验：完成“完成固定两次模型调用的单 Tool 往返”，并保存一段真实运行输出。
+    second = client.create(model=model, input=input_items, tools=[time_tool_schema()])
+    return {"answer": second.output_text, "input_items": input_items,
+            "tool_outputs": tool_outputs}
+```
 
-进阶挑战：更换一个输入或失败条件，预测轨迹后再运行验证。
+## 9. 逐段解释
 
-## 11. 自测问题
+`input_items` 是续写载体，不是 Session。第一次响应的每个 output item先保留。循环只处理 `function_call`，因为 response.output 未来可能包含其他类型。参数解析、名称路由和执行异常分开处理，便于定位。
 
-1. Python 执行结果怎样回到模型？
-2. 本节概念在执行轨迹的哪一步出现？
-3. 如果删除本节代码，用户会观察到什么差异？
-4. 本节能力为什么不能只依赖 Prompt 保证？
-5. 你会用哪个最小测试证明实现正确？
+第二次调用仍传 tools，是为了保持真实协议形状；但本函数无第三轮，所以只适合固定演示。模块 3 会把“调用—判断—执行—追加”放进受限循环。
 
-## 12. 总结与衔接
+## 10. 运行、测试与故障实验
 
-用三句话复述：本节问题、核心概念、代码变化。下一步：完成模块验收与代码答辩。
+```powershell
+python agent-from-scratch/course-checkpoints/02-tool-calling/steps/l08_execute_and_return_tool_output.py
+cd agent-from-scratch
+python -m pytest -q tests/test_course_module2.py
+```
 
-## 学习导航
+故障实验：把 call ID 回传成 `new-id`，观察测试失败；删除 `input_items.extend(first.output)`，检查第二次请求缺什么；让 handler 抛异常，确认错误成为 output；让第二个响应再次请求工具，记录固定两次结构为何无法继续。
 
-- [课程首页](../../README.md)
-- 模块检查点：agent-from-scratch/course-checkpoints/02-tool-calling/
+## 11. 练习与进阶挑战
+
+基础练习：增加 calculator handler 并处理一个带参数调用。第二项练习：同一第一响应放入两个 function call，验证生成两个对应 output。进阶挑战：在不写 `while` 的前提下说明第三次工具请求为何使代码结构迅速重复。
+
+答案见 [模块练习参考答案](模块练习参考答案.md)。
+
+## 12. 自测、总结与模块衔接
+
+1. 为什么必须保留 `response.output`？
+2. `call_id` 与工具名称分别解决什么问题？
+3. 工具输出为什么不等于最终回答？
+4. 非法 JSON 为什么不应执行处理器？
+5. 固定两次调用为何还不是通用 Agent Loop？
+
+模块 2 到此完成从请求、文本响应、工具请求到结果回传的最小闭环，但路径仍固定。下一课 [L09 从固定调用到 while 循环](../模块03-从零实现Agent Loop/L09-从固定调用到while循环.md) 将消除重复调用结构。
 
 ## 官方核验
 
-- 最后核验日期：2026-07-13
+- 最后核验日期：2026-07-14
 - [OpenAI Function calling](https://developers.openai.com/api/docs/guides/function-calling)
-- function_call_output 使用原 call_id 回传结果。

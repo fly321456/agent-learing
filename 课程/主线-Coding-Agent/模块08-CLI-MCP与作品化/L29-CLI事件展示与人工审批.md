@@ -1,90 +1,137 @@
-# L29 CLI事件展示与人工审批
+# L29 CLI 事件展示与人工审批：产品界面不应侵入 Runtime
 
-> 建议时长：60–90 分钟｜讲解 40%｜实践 60%
+> 建议学习时间：60–90 分钟。本课把前七个模块的协议交付为可使用 CLI，但仍使用离线 Event 和可注入输入完成核心实验。
 
 ## 1. 本节要解决的真实问题
 
-Runtime 怎样成为真正可使用的产品？
+Runner 已能返回 RunResult，Trace 也能记录 Event，但普通用户不应该等任务结束后再打开 JSONL 才知道 Agent 正在做什么。Coding Agent 可能读取文件、请求补丁、等待审批、运行测试或重试模型；CLI 需要即时展示这些状态，并在高风险 Tool 前询问用户。
 
-学习完成后，你不仅要记住结论，还要能在运行轨迹和代码中指出它发生在哪里。
+最直接的实现是在 Runner 内到处 `print()` 和 `input()`。这样 Runtime 无法在测试、Web、服务端或无交互环境复用，审批也难以注入自动策略。本课建立两条边界：Runner 只产生结构化 Event 和调用 approval callback；CLI 负责把 Event 渲染成人类文本，并把用户输入转换为布尔决定。
 
-## 2. 前置知识回顾
+问题链是：哪些 Event 值得展示？最终答案写 stdout 还是 stderr？审批无输入时为什么默认拒绝？是否显示完整 Tool 参数？Session、Resume、Trace 参数由谁解析？
 
-回顾上一课形成的执行链，先写出你认为本节修改前程序缺少的能力。不要先看最终工程代码。
+## 2. CLI 在架构中的位置
 
-## 3. 场景与类比
+```text
+User terminal
+  → argparse / command options
+  → Agent + Runner + ToolContext
+  ← Event Sink: progress to stderr
+  ← RunResult.content: final answer to stdout
+```
 
-把 Coding Agent 想成一名受约束的开发者：它需要知道目标、选择动作、使用工具获得事实，再根据事实继续工作。Runtime 怎样成为真正可使用的产品？ 这正是本节要补齐的环节。
+CLI 是 Adapter（适配器），不是 Runtime 核心。它把命令行参数转换为配置，把 Event 转换为文本，把键盘输入转换为审批结果。Runner 不知道终端颜色、提示语或 `argparse`。
 
-## 4. 概念图与手工轨迹
+这种边界让同一 Runtime 后续可接 Web、IDE 或测试 Sink，而不改 Agent Loop。
 
-~~~text
-User Task -> Decide -> Act -> Observe -> Decide Again -> Finish
-~~~
+## 3. 两个实际使用案例
 
-先手工写一条输入、动作、观察和下一步，再运行代码验证你的预测。
+案例一：Agent 读取文件并完成。stderr 显示 `[1] tool -> read_file` 和 `[1] tool <- read_file (success)`，stdout 最后只输出答案。用户可以把最终答案通过管道写文件，同时仍在终端看到进度。
 
-## 5. 本节唯一核心概念
+案例二：Agent 请求 `run_command(["pytest"])`。CLI 先展示 Tool 名和参数，再提示 `[y/N]`。用户直接按 Enter，审批结果是 False，Tool handler 不执行。默认值必须安全，因为非交互管道、误触回车和输入中断都不应自动放行副作用。
 
-CLI 消费 Event 展示过程，用 stderr 呈现审批信息，用最终退出码表达运行结果。
+第三个案例是 `--trace trace.jsonl`：同一个 Event 先由 CLI 展示，再由 JsonlTraceWriter 持久化，二者不重新发明事件格式。
 
-本节先把这一件事做正确，不提前加入后续模块的抽象。
+## 4. Event 渲染不是业务控制
 
-## 6. 本节代码增量
+```python
+def format_event(event):
+    if event.type == "tool_called":
+        return f"[{event.step}] tool -> {event.data['name']}"
+    if event.type == "tool_completed":
+        return f"[{event.step}] tool <- {event.data['name']} ({event.data['status']})"
+```
 
-修改目标：**运行正式 coding-agent CLI**。
+format_event 是纯函数：输入 Event，输出字符串或 None。它不能决定 Tool 是否执行，也不能修改 Event。未知类型返回 None，让 CLI 逐步增加展示而不破坏 Runtime 新事件。
 
-~~~python
-# before: 程序还不能表达本节能力
-# after: 只加入本节所需的最小状态与行为
-~~~
+正式 CLI 可展示 `llm_retry`、`run_resumed` 和 `max_steps`，但不要把每个底层调试 Event 都倾倒给普通用户。
 
-从上一检查点复制代码到 .learning/current/，只完成上述增量。
+## 5. 本课唯一代码增量：可注入审批
 
-## 7. 关键代码解释
+```python
+def request_approval(tool_name, arguments, input_fn=input):
+    prompt = f"Allow {tool_name} with {arguments}? [y/N] "
+    return input_fn(prompt).strip().lower() in {"y", "yes"}
+```
 
-阅读代码时依次回答：输入从哪里来、谁做决定、谁执行动作、结果保存在哪里、什么条件结束。任何无法回答的问题都应先通过打印轨迹或测试验证，而不是靠猜测。
+输入函数可注入，测试可以传 `lambda _: "yes"` 或空字符串，不需要真的阻塞终端。只有明确 y/yes 放行，其他输入一律拒绝。
 
-## 8. 运行与预期输出
+模块 5 的 ToolManager 仍是最终执行闸门。CLI 只提供 callback，不能因为界面显示过“Approval required”就绕过 Manager 检查。
 
-~~~powershell
-cd agent-from-scratch/.learning/current
-coding-agent --help
-~~~
+## 6. stdout 与 stderr 的契约
 
-预期关键输出：
+```text
+stdout: 最终内容，便于管道和脚本消费
+stderr: 进度、审批提示、警告、非完成原因
+exit code 0: completed
+exit code non-zero: denied / error / max_steps
+```
 
-~~~text
-usage: coding-agent
-~~~
+若 Event 与答案都写 stdout，`coding-agent task > answer.txt` 会混入工具日志。退出码比搜索输出中的“success”更稳定，自动化调用者应同时读取 RunResult reason 和进程 code。
 
-## 9. 常见错误与排障
+CLI 的人类可读文本不是新的 Runtime 协议；机器集成优先使用结构化 API 或 JSON 模式。
 
-- 一次加入多个后续能力，导致无法判断哪一步出错。
-- 只看最终文字，没有检查动作、观察和结束条件。
-- 运行目录错误，实际执行了最终参考项目而不是学习副本。
+## 7. 两个错误直觉与纠正
 
-排障顺序：确认输入 -> 打印本轮状态 -> 检查动作结果 -> 检查终止条件。
+### 误区一：CLI 只需最后打印答案
 
-## 10. 实践任务
+长任务没有过程反馈会让用户误以为卡死，也无法在危险操作前参与。关键 Event 和审批是 Coding Agent 产品体验的一部分。
 
-基础实验：完成“运行正式 coding-agent CLI”，并保存一段真实运行输出。
+### 误区二：为了方便演示，审批默认 yes
 
-进阶挑战：更换一个输入或失败条件，预测轨迹后再运行验证。
+演示环境最容易被复制到真实项目。安全默认必须从第一版保持；自动批准应是显式策略，并受工作区、Tool 风险和参数限制。
 
-## 11. 自测问题
+另一个误区是把完整源码和环境变量都打印在审批提示中。用户需要足够决策的信息，但敏感值应脱敏，长参数应截断并允许查看详情。
 
-1. Runtime 怎样成为真正可使用的产品？
-2. 本节概念在执行轨迹的哪一步出现？
-3. 如果删除本节代码，用户会观察到什么差异？
-4. 本节能力为什么不能只依赖 Prompt 保证？
-5. 你会用哪个最小测试证明实现正确？
+## 8. 完整 CLI 轨迹
 
-## 12. 总结与衔接
+```text
+$ coding-agent "run tests" --workspace repo --trace run.jsonl
+[1] tool -> run_command                         # stderr
+Approval required: run_command {command:[...]}  # stderr
+Allow this operation? [y/N] y
+[1] tool <- run_command (success)               # stderr
+All tests passed.                               # stdout
+process exit code=0
+```
 
-用三句话复述：本节问题、核心概念、代码变化。下一课：L30 MCP到底标准化什么
+拒绝轨迹则产生 ToolResult denied、Run finish_reason=denied、stderr 显示结束原因，退出码非零。CLI 不应偷偷再次询问或换另一个 Tool 名绕过拒绝。
 
-## 学习导航
+## 9. Session、Resume 与 Trace 参数
 
-- [课程首页](../../README.md)
-- 模块检查点：agent-from-scratch/course-checkpoints/08-cli-mcp-final/
+正式项目的 CLI 还提供 `--session`、`--resume RUN_ID`、`--workspace`、`--max-steps` 和 `--trace`。参数解析只负责建立对象：SessionStore、CheckpointStore、ToolContext 和 Event Sink；真正的恢复与裁剪仍由对应模块执行。
+
+```python
+if bool(args.prompt) == bool(args.resume):
+    parser.error("provide either a prompt or --resume")
+```
+
+Prompt 与 Resume 互斥，避免调用者既创建新 Run 又要求恢复旧 Run。模型必须由参数或环境变量显式指定，不写永久默认模型名。
+
+## 10. 运行、预期输出与故障实验
+
+```powershell
+python agent-from-scratch/course-checkpoints/08-cli-mcp-final/steps/l29_cli_events_approval.py
+```
+
+```text
+event=[2] tool <- apply_patch (success) approval=false
+```
+
+故障实验：输入空字符串、no、YES 和任意文字；让未知 Event 进入 formatter；把进度错误写入 stdout，观察管道污染；在审批前隐藏 arguments，判断用户是否有足够信息；让 input_fn 抛 EOFError，设计 fail closed 处理。
+
+## 11. 基础练习与进阶挑战
+
+基础练习：增加 denied、timeout 和 llm_retry 的展示，并保持纯函数。进阶挑战：实现 `--json` 输出，每行输出 Event JSON，最终输出 RunResult JSON；说明如何避免与人类文本混用。
+
+答案见 [模块练习参考答案](模块练习参考答案.md)。
+
+## 12. 自测、总结与下一课
+
+1. 为什么 CLI 应是 Runtime 的 Adapter？
+2. Event 展示和审批控制分别属于哪一层？
+3. 为什么最终答案与进度应分 stdout/stderr？
+4. 空输入为什么必须默认拒绝？
+5. `--resume` 与新 prompt 为什么互斥？
+
+下一课 [L30 MCP 到底标准化什么](L30-MCP到底标准化什么.md) 将把 Tool 从单个 CLI 进程扩展为可被标准客户端发现和调用的协议服务。

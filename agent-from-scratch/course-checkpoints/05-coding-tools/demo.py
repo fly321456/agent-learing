@@ -1,29 +1,33 @@
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 
 
-def workspace_path(workspace: Path, relative: str) -> Path:
-    target = (workspace / relative).resolve()
-    target.relative_to(workspace.resolve())
-    return target
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+from course_tools import (  # noqa: E402
+    ToolCall, ToolContext, ToolManager, WorkspaceBoundaryError,
+    create_coding_tools, read_file,
+)
 
 
-with tempfile.TemporaryDirectory() as directory:
-    workspace = Path(directory).resolve()
-    source = workspace / "demo.py"
-    source.write_text("value = 1\n", encoding="utf-8")
-    try:
-        workspace_path(workspace, "../outside.py")
-    except ValueError:
-        print("outside=blocked")
-    text = source.read_text(encoding="utf-8")
-    source.write_text(text.replace("value = 1", "value = 2"), encoding="utf-8")
-    completed = subprocess.run(
-        [sys.executable, "-c", "from demo import value; assert value == 2"],
-        cwd=workspace,
-        check=False,
-    )
-    print(f"patch=success test_exit={completed.returncode}")
+def main() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        workspace = Path(directory)
+        (workspace / "app.py").write_text("value = 1\n", encoding="utf-8")
+        context = ToolContext(workspace, approval=lambda _tool, _args: True)
+        manager = ToolManager(create_coding_tools())
+        try:
+            read_file(context=context, path="../outside.py")
+        except WorkspaceBoundaryError:
+            print("outside=blocked")
+        patched = manager.execute(ToolCall("p1", "apply_patch", {
+            "path": "app.py", "old_text": "value = 1", "new_text": "value = 2"
+        }), context)
+        tested = manager.execute(ToolCall("t1", "run_command", {
+            "command": [sys.executable, "-c", "from app import value; assert value == 2"]
+        }), context)
+        print(f"patch={patched.status} test={tested.status} exit_code={tested.exit_code or 0}")
 
+
+if __name__ == "__main__":
+    main()
