@@ -61,7 +61,7 @@ def test_optional_modules_each_have_four_lessons_and_acceptance() -> None:
     for directory, prefix in expected.items():
         root = OPTIONAL_ROOT / directory
         assert len(list(root.glob(f"{prefix}[0-9][0-9]-*.md"))) == 4
-        assert len(list(root.glob("*.md"))) == (7 if directory == "RAG" else 6)
+        assert len(list(root.glob("*.md"))) == 7
 
 
 def test_all_nine_course_states_run_offline() -> None:

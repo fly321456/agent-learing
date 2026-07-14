@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import re
 import subprocess
 import sys
 
 
 LAB = Path(__file__).resolve().parents[1] / "course-labs" / "multi-agent"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+MULTI_AGENT_COURSE = next(
+    path
+    for path in REPOSITORY_ROOT.rglob("Multi-Agent")
+    if path.is_dir() and (path / "模块导学.md").is_file()
+)
 
 
 def load_lab():
@@ -83,3 +90,18 @@ def test_multi_agent_steps_and_demo_run_offline() -> None:
         )
         assert completed.returncode == 0, completed.stderr
         assert completed.stdout.strip()
+
+
+def test_multi_agent_lessons_meet_textbook_quality_gate() -> None:
+    lessons = sorted(MULTI_AGENT_COURSE.glob("A[0-9][0-9]-*.md"))
+    assert len(lessons) == 4
+    for lesson in lessons:
+        content = lesson.read_text(encoding="utf-8", errors="strict")
+        assert 3500 <= len(content) <= 15000, lesson.name
+        headings = re.findall(r"^## (\d+)\.", content, re.MULTILINE)
+        assert headings == [str(index) for index in range(1, 13)], lesson.name
+        assert content.count("~~~") + content.count("```") >= 6, lesson.name
+        assert content.count("？") >= 5, lesson.name
+
+    answer_books = list(MULTI_AGENT_COURSE.glob("*参考答案*.md"))
+    assert len(answer_books) == 1
