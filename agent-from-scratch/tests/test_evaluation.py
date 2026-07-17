@@ -7,6 +7,7 @@ import sys
 from agent_from_scratch.evaluation import (
     load_cases,
     run_offline_protocol_eval,
+    run_protocol_replay,
     summarize_results,
 )
 
@@ -54,8 +55,8 @@ def test_eval_summary_records_core_metrics():
     }
 
 
-def test_offline_protocol_eval_runs_all_twenty_tool_sequences():
-    summary = run_offline_protocol_eval(load_cases())
+def test_protocol_replay_runs_all_twenty_recorded_tool_sequences():
+    summary = run_protocol_replay(load_cases())
 
     assert summary["total"] == 20
     assert summary["passed"] == 20

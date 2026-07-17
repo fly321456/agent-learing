@@ -3,7 +3,17 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 
-FinishReason = Literal["completed", "tool_calls", "max_steps", "denied", "error"]
+FinishReason = Literal[
+    "completed",
+    "tool_calls",
+    "max_steps",
+    "denied",
+    "error",
+    "incomplete",
+    "failed",
+    "cancelled",
+    "refusal",
+]
 ToolStatus = Literal["success", "error", "denied", "timeout"]
 
 
@@ -47,6 +57,7 @@ class LLMResponse:
     tool_calls: list[ToolCall] = field(default_factory=list)
     continuation_items: list[Any] = field(default_factory=list)
     finish_reason: FinishReason | None = None
+    status_detail: str | None = None
     raw_response: Any | None = field(default=None, repr=False, compare=False)
 
 
@@ -60,4 +71,3 @@ class RunResult:
     steps: int
     finish_reason: FinishReason
     run_id: str
-

@@ -131,3 +131,7 @@ first=patched resumed=patched side_effects=1 next_step=2
 5. 哪些 Tool 需要额外幂等设计？
 
 下一课 [L24 Config、错误、Retry 与 Timeout](L24-Config、错误、Retry与Timeout.md) 把恢复之外的暂时性失败纳入明确策略。
+
+## 最终实现校准
+
+正式 Checkpoint 保存 `completed_calls: call_id -> ToolResult`。恢复时相同 call_id 与相同工具名会复用已持久化结果并发出 `tool_reused` Event，不再次调用 Handler；相同 call_id 若对应不同工具则立即报错。但这仍不是事务型 exactly-once：进程可能在外部副作用已发生、Checkpoint 原子替换尚未完成之间崩溃。数据库写入、远程 API 和发布动作仍需幂等键、事务或人工确认。

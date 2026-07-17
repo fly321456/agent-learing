@@ -135,3 +135,7 @@ events=2 sequences=[1, 2]
 5. 聚合评测与单 Run Trace 如何配合？
 
 模块 7 已让 Runtime 的正确性、回归和失败都可验证。下一模块从 [L29 CLI 事件展示与人工审批](../模块08-CLI-MCP与作品化/L29-CLI事件展示与人工审批.md) 开始，把这些能力交付成可使用的作品。
+
+## 最终实现校准
+
+正式 `Runner.emit` 与 `JsonlTraceWriter` 在 Event 建立和落盘两道边界统一调用脱敏器：敏感 key、疑似 token/authorization 值会被替换，超长字符串和集合会被截断。脱敏降低偶然泄露风险，但不应把 Trace 当作密码库；生产系统还应限制文件权限、保留期和访问主体。

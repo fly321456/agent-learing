@@ -54,15 +54,27 @@ class OpenAILLM(BaseLLM):
                 input=messages,
                 tools=tools or [],
             )
-            tool_calls = [
-                ToolCall(
-                    id=item.call_id,
-                    name=item.name,
-                    arguments=json.loads(item.arguments),
-                )
-                for item in raw_response.output
-                if item.type == "function_call"
-            ]
+            output_items = list(raw_response.output or [])
+            tool_calls: list[ToolCall] = []
+            refusals: list[str] = []
+            for item in output_items:
+                if item.type == "function_call":
+                    arguments = json.loads(item.arguments)
+                    if not isinstance(arguments, dict):
+                        raise TypeError("Function arguments must decode to a JSON object")
+                    tool_calls.append(
+                        ToolCall(
+                            id=item.call_id,
+                            name=item.name,
+                            arguments=arguments,
+                        )
+                    )
+                elif item.type == "message":
+                    refusals.extend(
+                        content.refusal
+                        for content in item.content
+                        if content.type == "refusal"
+                    )
         except (TypeError, ValueError) as exc:
             raise LLMError(f"Invalid OpenAI response: {exc}") from exc
         except Exception as exc:
@@ -79,10 +91,39 @@ class OpenAILLM(BaseLLM):
             error = RetryableLLMError if retryable else LLMError
             raise error(f"OpenAI request failed: {exc}") from exc
 
+        status = raw_response.status or "completed"
+        if status in {"queued", "in_progress"}:
+            raise LLMError(
+                f"OpenAI synchronous response returned non-terminal status: {status}"
+            )
+        if status not in {"completed", "incomplete", "failed", "cancelled"}:
+            raise LLMError(f"OpenAI response returned unknown status: {status}")
+
+        content = raw_response.output_text or ""
+        refusal = "\n".join(refusals)
+        status_detail = None
+        if status == "incomplete" and raw_response.incomplete_details is not None:
+            status_detail = raw_response.incomplete_details.reason
+        elif status == "failed" and raw_response.error is not None:
+            status_detail = f"{raw_response.error.code}: {raw_response.error.message}"
+        elif refusal:
+            content = content or refusal
+            status_detail = refusal
+
+        if status != "completed":
+            finish_reason = status
+        elif refusal:
+            finish_reason = "refusal"
+        elif tool_calls:
+            finish_reason = "tool_calls"
+        else:
+            finish_reason = "completed"
+
         return LLMResponse(
-            content=raw_response.output_text or "",
+            content=content,
             tool_calls=tool_calls,
-            continuation_items=list(raw_response.output),
-            finish_reason="tool_calls" if tool_calls else "completed",
+            continuation_items=output_items,
+            finish_reason=finish_reason,
+            status_detail=status_detail,
             raw_response=raw_response,
         )

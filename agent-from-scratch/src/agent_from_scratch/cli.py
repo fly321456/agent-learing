@@ -6,6 +6,7 @@ import sys
 from .agent import Agent
 from .config import RuntimeConfig
 from .llm import OpenAILLM
+from .redaction import format_for_approval
 from .runner import RetryPolicy, Runner
 from .session import CheckpointStore, ContextWindow, Session, SessionStore
 from .tools import ToolContext, ToolSpec, create_default_tools
@@ -30,8 +31,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _approve(tool: ToolSpec, arguments: dict) -> bool:
-    print(f"Approval required: {tool.name} {arguments}", file=sys.stderr)
-    return input("Allow this operation? [y/N] ").strip().lower() in {"y", "yes"}
+    print(
+        f"Approval required: {tool.name} {format_for_approval(arguments)}",
+        file=sys.stderr,
+    )
+    try:
+        answer = input("Allow this operation? [y/N] ")
+    except EOFError:
+        return False
+    return answer.strip().lower() in {"y", "yes"}
 
 
 def _display_event(event) -> None:
@@ -92,8 +100,11 @@ def main(argv: list[str] | None = None) -> int:
         session_store = None
         if args.session:
             session_store = SessionStore(config.workspace / ".agent" / "sessions")
-            session_path = session_store.directory / f"{args.session}.json"
-            session = session_store.load(args.session) if session_path.exists() else Session(args.session)
+            session = (
+                session_store.load(args.session)
+                if session_store.exists(args.session)
+                else Session(args.session)
+            )
             history = ContextWindow(config.context_chars).trim(session.messages)
         result = runner.run(
             agent,

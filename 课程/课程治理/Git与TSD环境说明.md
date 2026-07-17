@@ -13,11 +13,11 @@
 - `agent-from-scratch/schemas.py`
 - `agent-from-scratch/tools.py`
 
-这些文件的 Python 明文哈希与当前 HEAD 一致，不是本次重构产生的真实内容修改。正式新代码位于 `agent-from-scratch/src/agent_from_scratch/`，Git 可以正常显示其文本 diff。
+这些旧根文件不是正式入口，本轮也没有主动编辑。2026-07-17 复核又确认：正式 `agent-from-scratch/src/agent_from_scratch/runner.py`、`tools.py` 等已编辑源码对 Python 仍是正确明文，但 Git 的 `diff --numstat` 同样返回二进制 `- -`。因此影响范围已经不再局限于上述 8 个旧文件；不能继续宣称正式 `src/` 可安全显示或暂存文本 diff。
 
 ## 安全禁令
 
-- 不要执行 `git add -A` 或提交上述 8 个文件。
+- 不要执行 `git add -A`，也不要暂存任何被 `git diff --numstat` 报为 `- -` 的文件。
 - 不要为了消除状态而覆盖、批量移动或重写旧文件。
 - 不要停止、卸载或绕过企业安全驱动。
 - 不要把 Git 读到的 8192 字节容器当作源码保存。
@@ -34,11 +34,11 @@
 git status --short
 git diff --text -- agent-from-scratch/llm.py
 git diff --numstat -- agent-from-scratch/llm.py
+git diff --numstat -- agent-from-scratch/src/agent_from_scratch/tools.py
 ```
 
-验收标准：8 个旧文件不再显示虚假修改；`git diff --numstat` 不再以二进制 `- -` 表示；Git 显示的是正常 Python 文本。随后才能安全地移动或删除旧根脚本。
+验收标准：8 个旧文件不再显示虚假修改；所有待提交的正式源码在 `git diff --numstat` 中都显示数字行数而不是二进制 `- -`；Git diff 与 Python/PowerShell 读取的明文一致。随后才能安全暂存正式源码，是否移动旧根脚本仍需单独审批。
 
 ## 本次重构策略
 
-本次没有修改或移动这 8 个旧文件。所有新 Runtime 实现放入标准 `src/` 包，并通过普通 wheel 隔离安装验证。提交时必须显式选择新代码、课程归档和文档，直到 TSD 问题由外部策略解除。
-
+本次没有修改或移动这 8 个旧文件。新 Runtime 实现位于标准 `src/` 包，并已通过 Python 明文视角的测试和 wheel 隔离安装验证；但 Git 视角仍可能是保护容器。本轮禁止暂存或提交，直到安全管理员解除策略并按上面的恢复验收确认每个目标文件都是正常文本。

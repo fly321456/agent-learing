@@ -138,3 +138,7 @@ session=learning turns=1 messages=2
 5. 原子替换解决了什么、没解决什么？
 
 下一课 [L22 上下文预算与压缩](L22-上下文预算与压缩.md) 讨论 Session 可以长期增长，但每次模型调用不能无限携带全部历史。
+
+## 最终实现校准
+
+正式包使用 `Message(role, content, turn_id)` 与 `Turn(id, user_input)`，新用户输入通过 `start_turn` 建立稳定归属，assistant 回复必须引用已存在的 turn_id。Session/Checkpoint ID 仅允许 1–64 位 ASCII 字母、数字、下划线与连字符，并在拼接后再次做目录包含校验；旧版仅含 role/content 的消息会在加载时迁移到生成的 turn_id。

@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: agent-from-scratch
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: agent-from-scratch/pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,mcp]"
+      - run: python -m pytest
+      - run: python -m compileall -q src tests examples
+      - run: python examples/offline_demo.py
+      - run: coding-agent-eval
+
+  minimum-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            agent-from-scratch/pyproject.toml
+            agent-from-scratch/constraints-min.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -c constraints-min.txt -e ".[dev,mcp]"
+      - run: python -m pytest
+
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "build>=1,<2"
+      - run: python -m build --wheel
+      - run: python -m venv .wheel-venv
+      - run: >-
+          .wheel-venv/bin/python -c
+          "import glob, subprocess, sys;
+          wheels=glob.glob('dist/*.whl');
+          assert len(wheels)==1, wheels;
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-deps', wheels[0]])"
+      - run: >-
+          .wheel-venv/bin/python -c
+          "from importlib.resources import files;
+          import agent_from_scratch;
+          assert files('agent_from_scratch').joinpath('data', 'cases.json').is_file()"
+      - run: .wheel-venv/bin/coding-agent --help

@@ -135,3 +135,7 @@ event=[2] tool <- apply_patch (success) approval=false
 5. `--resume` 与新 prompt 为什么互斥？
 
 下一课 [L30 MCP 到底标准化什么](L30-MCP到底标准化什么.md) 将把 Tool 从单个 CLI 进程扩展为可被标准客户端发现和调用的协议服务。
+
+## 最终实现校准
+
+正式 CLI 在展示审批参数前先脱敏并限制总长度，避免密钥、整份补丁或超大命令污染终端与日志。只有明确输入 `y`/`yes` 才批准；空输入、其他文字、`EOFError` 以及审批回调自身异常全部 fail closed。未显式标注风险的扩展 Tool 默认按 execute 风险处理，不会因开发者漏填字段静默获得低权限路径。

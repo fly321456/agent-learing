@@ -9,9 +9,10 @@
 - `BaseLLM.generate(...) -> LLMResponse` 隔离模型供应商。
 - `Runner.run(...) -> RunResult` 返回完整内容、事件、工具结果和结束原因。
 - 支持纯文本、单/多 Tool、未知 Tool、审批拒绝和 `max_steps`。
-- Coding Tools 限制在工作区内，写入与执行默认请求审批。
-- Session、上下文预算、检查点恢复、模型 Retry、命令 Timeout 和 JSONL Trace。
-- 20 个固定任务的离线协议回归、真实工具 E2E 测试、CLI 和可选只读 MCP server。
+- 文件读取、搜索和补丁限制在解析后的工作区内；写入、执行以及未分类工具默认请求审批。
+- 严格 Tool Schema 与本地参数复验；显式归一化 incomplete、failed、cancelled 和 refusal。
+- Typed Session/Turn、显式上下文裁剪结果、已完成 call_id 恢复复用、模型 Retry、命令 Timeout 和脱敏 JSONL Trace。
+- 20 个固定任务的协议重放与独立结果评测接口、真实工具 E2E 测试、CLI 和可选只读 MCP server。
 
 ## 安装
 
@@ -50,7 +51,7 @@ $env:OPENAI_MODEL="your-model"
 coding-agent --workspace . "检查这个项目并总结测试情况"
 ```
 
-写文件或执行命令时，CLI 会在 stderr 显示工具与参数，并等待人工审批。常用参数：
+写文件、执行命令或调用未明确分类的扩展工具时，CLI 会在 stderr 显示经过脱敏和截断的参数，并等待人工审批；EOF、空输入和审批异常都按拒绝处理。常用参数：
 
 ```text
 --workspace PATH   限定工具可访问的工作区
@@ -74,17 +75,18 @@ CLI
      └─ RetryPolicy / JsonlTraceWriter
 ```
 
-`LLMResponse` 只代表一次模型调用，`RunResult` 才代表完整 Agent 运行。Runner 不读取供应商 `raw_response.output`；续写数据经 `continuation_items` 不透明传递。
+`LLMResponse` 只代表一次模型调用，`RunResult` 才代表完整 Agent 运行。Runner 不读取供应商 `raw_response.output`；续写数据经 `continuation_items` 不透明传递。适配层保留供应商状态详情和 refusal，不能把非 completed 状态伪装成正常文本完成。
 
 ## 安全边界
 
-- 路径解析后必须仍位于 `ToolContext.workspace`。
-- 补丁使用精确文本替换，歧义匹配默认失败。
-- 命令接收 argv 数组并使用 `shell=False`。
-- 写入和执行风险工具默认拒绝，除非审批回调允许。
-- 命令超时、审批拒绝和执行错误使用不同 `ToolResult.status`。
+- 路径解析后必须仍位于 `ToolContext.workspace`；搜索会逐个复核 glob 候选的真实路径。
+- 读取、搜索结果、单行和命令 Observation 均有服务端上限，模型参数不能放大上限。
+- 补丁使用非空精确文本匹配，歧义默认失败，保留原换行并通过同目录临时文件原子替换。
+- 命令接收 argv 数组并使用 `shell=False`，工作目录受限且有超时；这不是进程、网络或系统调用沙箱。
+- 写入、执行及未分类工具默认拒绝，除非审批回调明确允许。
+- Trace、Runner Event 和审批预览统一脱敏并限制大小；命令超时、审批拒绝和执行错误使用不同状态。
 
-这些应用层限制不能替代容器、虚拟机、低权限用户和网络隔离。不要对不可信仓库授予主机高权限。
+这些应用层限制不能替代容器、虚拟机、低权限用户和网络隔离。Checkpoint 通过持久化已完成 `call_id` 降低恢复时重复副作用，但 JSON 文件无法提供事务型 exactly-once；外部写操作仍需幂等键或事务设施。不要对不可信仓库授予主机高权限。
 
 ## MCP 实验
 
@@ -93,6 +95,14 @@ coding-agent-mcp
 ```
 
 MCP server 只暴露读取和搜索工具，复用主项目实现。stdio 模式下不要向 stdout 输出调试日志。
+
+## 协议依据
+
+- [OpenAI Function calling：严格模式](https://developers.openai.com/api/docs/guides/function-calling#strict-mode)
+- [OpenAI Responses create：状态与输出类型](https://developers.openai.com/api/reference/resources/responses/methods/create)
+- [MCP Python SDK v1](https://github.com/modelcontextprotocol/python-sdk/tree/v1.x)
+
+依赖锁定在 `mcp>=1.27,<2`，因为本课程代码基于稳定的 v1 API；升级 v2 必须单独完成迁移和契约复测。
 
 ## 项目结构
 

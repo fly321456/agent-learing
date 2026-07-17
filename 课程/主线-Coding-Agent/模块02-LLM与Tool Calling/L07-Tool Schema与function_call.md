@@ -139,5 +139,7 @@ python agent-from-scratch/course-checkpoints/02-tool-calling/steps/l07_tool_sche
 
 ## 官方核验
 
-- 最后核验日期：2026-07-14
-- [OpenAI Function calling](https://developers.openai.com/api/docs/guides/function-calling)
+- 最后核验日期：2026-07-17
+- [OpenAI Function calling：Strict mode](https://developers.openai.com/api/docs/guides/function-calling#strict-mode)
+
+最终 Runtime 使用 `strict: true`，并对每一层 object 设置 `additionalProperties: false`，同时把全部 properties 列入 `required`；业务上的可选值用包含 `null` 的类型表示。严格模式减少模型输出歧义，但不能替代本地执行前校验，因此 `ToolManager` 会再次验证类型、必填字段、额外字段和数值范围。

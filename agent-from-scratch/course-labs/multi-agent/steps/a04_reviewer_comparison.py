@@ -5,8 +5,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from multi_agent_lab import ReviewCase, compare_single_and_reviewer, decide_from_comparison  # noqa: E402
 
 cases = [
-    ReviewCase("good", "code plus tests", ("code", "tests")),
-    ReviewCase("bad", "code only", ("code", "tests")),
+    ReviewCase("good", "code plus tests", ("code", "tests"), True),
+    ReviewCase("bad", "code only", ("code", "tests"), False),
 ]
 comparison = compare_single_and_reviewer(cases)
 decision = decide_from_comparison(comparison)

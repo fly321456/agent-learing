@@ -151,7 +151,7 @@ def test_module_two_lessons_have_textbook_structure() -> None:
         assert all(re.search(fr"^## {index}\.", content, re.MULTILINE) for index in range(1, 13))
         assert content.count("```") >= 6
         assert content.count("\uff1f") >= 5
-        assert "2026-07-14" in content
+        assert re.search(r"2026-07-(14|17)", content)
 
     answer_marker = "\u53c2\u8003\u7b54\u6848"
     answers = [path for path in module.glob("*.md") if answer_marker in path.name]

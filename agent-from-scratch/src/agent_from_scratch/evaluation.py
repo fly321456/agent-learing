@@ -3,7 +3,7 @@ from importlib.resources import files
 import json
 from pathlib import Path
 import time
-from typing import Any
+from typing import Any, Callable
 
 from .agent import Agent
 from .llm import FakeLLM
@@ -18,6 +18,10 @@ class EvalCase:
     category: str
     prompt: str
     expected_tools: list[str]
+    expected_outcome: str | None = None
+
+
+EvalExecutor = Callable[[str], dict[str, Any]]
 
 
 def load_cases(path: Path | None = None) -> list[EvalCase]:
@@ -45,8 +49,8 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def run_offline_protocol_eval(cases: list[EvalCase]) -> dict[str, Any]:
-    """Exercise recorded tool sequences without executing real tools or using a model."""
+def run_protocol_replay(cases: list[EvalCase]) -> dict[str, Any]:
+    """Replay expected sequences to test transport plumbing, not agent quality."""
 
     tool_names = sorted({name for case in cases for name in case.expected_tools})
 
@@ -61,9 +65,11 @@ def run_offline_protocol_eval(cases: list[EvalCase]) -> dict[str, Any]:
             parameters={
                 "type": "object",
                 "properties": {},
+                "required": [],
                 "additionalProperties": False,
             },
             handler=stub_tool,
+            risk="read",
         )
         for name in tool_names
     ]
@@ -101,14 +107,44 @@ def run_offline_protocol_eval(cases: list[EvalCase]) -> dict[str, Any]:
     return summarize_results(results)
 
 
+def run_offline_protocol_eval(
+    cases: list[EvalCase], *, executor: EvalExecutor
+) -> dict[str, Any]:
+    """Evaluate independently produced actual behavior against case oracles."""
+    results: list[dict[str, Any]] = []
+    for case in cases:
+        started = time.perf_counter()
+        actual = executor(case.prompt)
+        actual_tools = list(actual.get("actual_tools", []))
+        finish_reason = actual.get("finish_reason")
+        outcome = actual.get("outcome")
+        failure = None
+        if actual_tools != case.expected_tools:
+            failure = "tool_sequence"
+        elif case.expected_outcome is not None and outcome != case.expected_outcome:
+            failure = "outcome_oracle"
+        elif finish_reason != "completed":
+            failure = str(finish_reason or "missing_finish_reason")
+        results.append(
+            {
+                "passed": failure is None,
+                "tool_calls": len(actual_tools),
+                "steps": int(actual.get("steps", 0)),
+                "duration_ms": (time.perf_counter() - started) * 1000,
+                "failure": failure,
+            }
+        )
+    return summarize_results(results)
+
+
 def main() -> None:
     cases = load_cases()
     print(
         json.dumps(
             {
                 "valid_cases": len(cases),
-                "mode": "offline_protocol",
-                "summary": run_offline_protocol_eval(cases),
+                "mode": "protocol_replay_not_agent_quality",
+                "summary": run_protocol_replay(cases),
             },
             ensure_ascii=False,
         )

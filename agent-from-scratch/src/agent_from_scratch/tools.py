@@ -3,11 +3,14 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 from datetime import datetime
+import os
 import operator
 from pathlib import Path
 import subprocess
+import tempfile
+import threading
 import time
-from typing import Any, Callable, Literal
+from typing import Any, Callable, IO, Literal
 
 from .errors import ToolExecutionError, WorkspaceBoundaryError
 from .schemas import ToolCall, ToolResult
@@ -23,11 +26,30 @@ class ToolContext:
     workspace: Path
     approval: ApprovalCallback | None = None
     command_timeout: float = 30.0
+    max_read_chars: int = 20_000
+    max_search_results: int = 100
+    max_search_line_chars: int = 1_000
+    max_search_file_bytes: int = 1_000_000
+    max_search_candidates: int = 10_000
+    max_tool_output_chars: int = 20_000
+    max_command_output_chars: int = 20_000
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "workspace", Path(self.workspace).resolve())
         if self.command_timeout <= 0:
             raise ValueError("command_timeout must be positive")
+        for field_name in (
+            "max_read_chars",
+            "max_search_results",
+            "max_search_line_chars",
+            "max_search_file_bytes",
+            "max_search_candidates",
+            "max_tool_output_chars",
+            "max_command_output_chars",
+        ):
+            value = getattr(self, field_name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ValueError(f"{field_name} must be a positive integer")
 
 
 @dataclass(frozen=True)
@@ -36,7 +58,7 @@ class ToolSpec:
     description: str
     parameters: dict[str, Any]
     handler: ToolHandler
-    risk: RiskLevel = "read"
+    risk: RiskLevel = "execute"
 
     @property
     def requires_approval(self) -> bool:
@@ -48,6 +70,7 @@ class ToolSpec:
             "name": self.name,
             "description": self.description,
             "parameters": self.parameters,
+            "strict": True,
         }
 
 
@@ -66,24 +89,39 @@ class ToolManager:
         if tool is None:
             return ToolResult(call.id, call.name, "error", error=f"Unknown tool: {call.name}")
 
-        if tool.requires_approval and (
-            context.approval is None or not context.approval(tool, call.arguments)
-        ):
+        try:
+            arguments = _validated_arguments(tool.parameters, call.arguments)
+        except (TypeError, ValueError) as exc:
             return ToolResult(
                 call.id,
                 call.name,
-                "denied",
-                error=f"Approval denied for {call.name}",
+                "error",
+                error=f"Invalid arguments for {call.name}: {exc}",
             )
+
+        if tool.requires_approval:
+            try:
+                approved = context.approval is not None and context.approval(
+                    tool, arguments
+                )
+            except Exception:
+                approved = False
+            if not approved:
+                return ToolResult(
+                    call.id,
+                    call.name,
+                    "denied",
+                    error=f"Approval denied for {call.name}",
+                )
 
         started = time.perf_counter()
         try:
-            output = tool.handler(context=context, **call.arguments)
+            output = tool.handler(context=context, **arguments)
             return ToolResult(
                 call.id,
                 call.name,
                 "success",
-                output=str(output),
+                output=_truncate_text(str(output), context.max_tool_output_chars),
                 duration_ms=(time.perf_counter() - started) * 1000,
             )
         except subprocess.TimeoutExpired:
@@ -111,6 +149,96 @@ def _workspace_path(context: ToolContext, path: str) -> Path:
     except ValueError as exc:
         raise WorkspaceBoundaryError(f"Path is outside the workspace: {path}") from exc
     return candidate
+
+
+def _schema_types(schema: dict[str, Any]) -> list[str]:
+    value = schema.get("type")
+    return value if isinstance(value, list) else [value]
+
+
+def _validate_schema_value(value: Any, schema: dict[str, Any], path: str) -> None:
+    schema_types = _schema_types(schema)
+    valid = (
+        (value is None and "null" in schema_types)
+        or (isinstance(value, str) and "string" in schema_types)
+        or (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and "integer" in schema_types
+        )
+        or (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and "number" in schema_types
+        )
+        or (isinstance(value, bool) and "boolean" in schema_types)
+        or (isinstance(value, list) and "array" in schema_types)
+        or (isinstance(value, dict) and "object" in schema_types)
+    )
+    if not valid:
+        raise TypeError(f"{path} does not match type {schema.get('type')!r}")
+    if value is None:
+        return
+    if "minimum" in schema and value < schema["minimum"]:
+        raise ValueError(f"{path} is below the minimum")
+    if "maximum" in schema and value > schema["maximum"]:
+        raise ValueError(f"{path} exceeds the maximum")
+    if isinstance(value, list):
+        if len(value) < schema.get("minItems", 0):
+            raise ValueError(f"{path} has too few items")
+        for index, item in enumerate(value):
+            _validate_schema_value(item, schema.get("items", {}), f"{path}[{index}]")
+    if isinstance(value, dict):
+        _validated_arguments(schema, value, path=path)
+
+
+def _validated_arguments(
+    schema: dict[str, Any], arguments: Any, *, path: str = "arguments"
+) -> dict[str, Any]:
+    if not isinstance(arguments, dict):
+        raise TypeError(f"{path} must be an object")
+    properties = schema.get("properties", {})
+    if not isinstance(properties, dict):
+        raise TypeError(f"{path} schema properties must be an object")
+    extras = set(arguments) - set(properties)
+    if extras and schema.get("additionalProperties") is False:
+        raise ValueError(f"{path} contains unknown fields: {sorted(extras)}")
+    normalized = dict(arguments)
+    for name in schema.get("required", []):
+        if name not in properties:
+            raise ValueError(f"{path} schema requires unknown property {name!r}")
+        if name not in normalized:
+            if "null" in _schema_types(properties[name]):
+                normalized[name] = None
+            else:
+                raise ValueError(f"{path}.{name} is required")
+    for name, value in normalized.items():
+        child_schema = properties.get(name)
+        if child_schema is not None:
+            _validate_schema_value(value, child_schema, f"{path}.{name}")
+    return normalized
+
+
+def _bounded_positive_integer(value: int, hard_cap: int, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"{name} must be a positive integer")
+    return min(value, hard_cap)
+
+
+def _truncate_text(value: str, max_chars: int) -> str:
+    marker = "\n... [truncated]"
+    if len(value) <= max_chars:
+        return value
+    kept = max(0, max_chars - len(marker))
+    return value[:kept] + marker
+
+
+def _validate_search_glob(glob: str) -> None:
+    if not isinstance(glob, str) or not glob:
+        raise ValueError("glob must be a non-empty relative pattern")
+    normalized = glob.replace("\\", "/")
+    if Path(glob).is_absolute() or any(part == ".." for part in normalized.split("/")):
+        raise WorkspaceBoundaryError("glob must stay inside the search root")
 
 
 _BINARY_OPERATORS = {
@@ -156,45 +284,69 @@ def read_file(
     *,
     context: ToolContext,
     path: str,
-    start_line: int = 1,
+    start_line: int | None = 1,
     end_line: int | None = None,
-    max_chars: int = 20_000,
+    max_chars: int | None = 20_000,
 ) -> str:
+    start_line = 1 if start_line is None else start_line
+    max_chars = context.max_read_chars if max_chars is None else max_chars
     if start_line < 1 or (end_line is not None and end_line < start_line):
         raise ValueError("Invalid line range")
+    effective_max_chars = _bounded_positive_integer(
+        max_chars, context.max_read_chars, "max_chars"
+    )
     target = _workspace_path(context, path)
     text = target.read_text(encoding="utf-8")
     lines = text.splitlines(keepends=True)
     selected = "".join(lines[start_line - 1 : end_line])
-    if len(selected) > max_chars:
-        return selected[:max_chars] + "\n... [truncated]"
-    return selected
+    return _truncate_text(selected, effective_max_chars)
 
 
 def search_files(
     *,
     context: ToolContext,
     query: str,
-    path: str = ".",
-    glob: str = "*",
-    max_results: int = 100,
+    path: str | None = ".",
+    glob: str | None = "*",
+    max_results: int | None = 100,
 ) -> str:
+    path = "." if path is None else path
+    glob = "*" if glob is None else glob
+    max_results = context.max_search_results if max_results is None else max_results
+    _validate_search_glob(glob)
+    effective_max_results = _bounded_positive_integer(
+        max_results, context.max_search_results, "max_results"
+    )
     root = _workspace_path(context, path)
     matches: list[str] = []
-    for file_path in sorted(root.rglob(glob)):
-        if not file_path.is_file() or ".git" in file_path.parts:
+    candidates_seen = 0
+    for file_path in root.rglob(glob):
+        candidates_seen += 1
+        if candidates_seen > context.max_search_candidates:
+            break
+        try:
+            resolved = file_path.resolve()
+            relative = resolved.relative_to(context.workspace)
+        except (OSError, ValueError):
+            continue
+        if not resolved.is_file() or ".git" in relative.parts:
             continue
         try:
-            lines = file_path.read_text(encoding="utf-8").splitlines()
+            if resolved.stat().st_size > context.max_search_file_bytes:
+                continue
+            lines = resolved.read_text(encoding="utf-8").splitlines()
         except (UnicodeDecodeError, OSError):
             continue
         for line_number, line in enumerate(lines, start=1):
             if query in line:
-                relative = file_path.relative_to(context.workspace).as_posix()
-                matches.append(f"{relative}:{line_number}:{line}")
-                if len(matches) >= max_results:
+                line = _truncate_text(line, context.max_search_line_chars)
+                matches.append(f"{relative.as_posix()}:{line_number}:{line}")
+                if len(matches) >= effective_max_results:
                     return "\n".join(matches) + "\n... [result limit reached]"
-    return "\n".join(matches)
+    output = "\n".join(matches)
+    if candidates_seen > context.max_search_candidates:
+        output += "\n... [candidate limit reached]"
+    return output
 
 
 def apply_patch(
@@ -203,17 +355,44 @@ def apply_patch(
     path: str,
     old_text: str,
     new_text: str,
-    replace_all: bool = False,
+    replace_all: bool | None = False,
 ) -> str:
+    replace_all = False if replace_all is None else replace_all
+    if old_text == "":
+        raise ValueError("old_text must not be empty")
     target = _workspace_path(context, path)
-    text = target.read_text(encoding="utf-8")
+    with target.open("r", encoding="utf-8", newline="") as source:
+        text = source.read()
     occurrences = text.count(old_text)
     if occurrences == 0:
         raise ValueError("old_text was not found")
     if occurrences > 1 and not replace_all:
         raise ValueError("old_text is not unique; set replace_all=true to replace every match")
     updated = text.replace(old_text, new_text, -1 if replace_all else 1)
-    target.write_text(updated, encoding="utf-8", newline="")
+    original_mode = target.stat().st_mode
+    temporary_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            newline="",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary.write(updated)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_name = temporary.name
+        os.chmod(temporary_name, original_mode)
+        os.replace(temporary_name, target)
+    finally:
+        if temporary_name is not None:
+            try:
+                Path(temporary_name).unlink(missing_ok=True)
+            except OSError:
+                pass
     return f"Updated {path}: {occurrences if replace_all else 1} replacement(s)"
 
 
@@ -221,37 +400,79 @@ def run_command(
     *,
     context: ToolContext,
     command: list[str],
-    cwd: str = ".",
+    cwd: str | None = ".",
 ) -> str:
+    cwd = "." if cwd is None else cwd
     if not command or not all(isinstance(part, str) and part for part in command):
         raise ValueError("command must be a non-empty list of strings")
     working_directory = _workspace_path(context, cwd)
-    completed = subprocess.run(
+    process = subprocess.Popen(
         command,
         cwd=working_directory,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=context.command_timeout,
-        check=False,
         shell=False,
     )
+    captured: dict[str, list[str]] = {"stdout": [], "stderr": []}
+    truncated: dict[str, bool] = {"stdout": False, "stderr": False}
+
+    def drain(name: str, stream: IO[str]) -> None:
+        retained = 0
+        try:
+            while chunk := stream.read(4096):
+                remaining = context.max_command_output_chars - retained
+                if remaining > 0:
+                    captured[name].append(chunk[:remaining])
+                    retained += min(len(chunk), remaining)
+                if len(chunk) > remaining:
+                    truncated[name] = True
+        finally:
+            stream.close()
+
+    assert process.stdout is not None and process.stderr is not None
+    readers = [
+        threading.Thread(target=drain, args=("stdout", process.stdout), daemon=True),
+        threading.Thread(target=drain, args=("stderr", process.stderr), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+    try:
+        return_code = process.wait(timeout=context.command_timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        for reader in readers:
+            reader.join()
+        raise
+    for reader in readers:
+        reader.join()
+
+    stdout = "".join(captured["stdout"])
+    stderr = "".join(captured["stderr"])
+    if truncated["stdout"]:
+        stdout += "\n... [stdout truncated]"
+    if truncated["stderr"]:
+        stderr += "\n... [stderr truncated]"
     output = (
-        f"exit_code={completed.returncode}\n"
-        f"stdout:\n{completed.stdout}\n"
-        f"stderr:\n{completed.stderr}"
+        f"exit_code={return_code}\n"
+        f"stdout:\n{stdout}\n"
+        f"stderr:\n{stderr}"
     )
-    if completed.returncode != 0:
+    output = _truncate_text(output, context.max_command_output_chars)
+    if return_code != 0:
         raise ToolExecutionError(output)
     return output
 
 
 def _object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
+    del required
     return {
         "type": "object",
         "properties": properties,
-        "required": required,
+        "required": list(properties),
         "additionalProperties": False,
     }
 
@@ -263,12 +484,14 @@ def create_default_tools() -> list[ToolSpec]:
             "Return the current local date and time.",
             _object_schema({}, []),
             get_current_time,
+            risk="read",
         ),
         ToolSpec(
             "calculator",
             "Evaluate a basic arithmetic expression without executing code.",
             _object_schema({"expression": {"type": "string"}}, ["expression"]),
             calculator,
+            risk="read",
         ),
         ToolSpec(
             "read_file",
@@ -276,13 +499,14 @@ def create_default_tools() -> list[ToolSpec]:
             _object_schema(
                 {
                     "path": {"type": "string"},
-                    "start_line": {"type": "integer", "minimum": 1},
+                    "start_line": {"type": ["integer", "null"], "minimum": 1},
                     "end_line": {"type": ["integer", "null"], "minimum": 1},
-                    "max_chars": {"type": "integer", "minimum": 1},
+                    "max_chars": {"type": ["integer", "null"], "minimum": 1},
                 },
                 ["path"],
             ),
             read_file,
+            risk="read",
         ),
         ToolSpec(
             "search_files",
@@ -290,13 +514,14 @@ def create_default_tools() -> list[ToolSpec]:
             _object_schema(
                 {
                     "query": {"type": "string"},
-                    "path": {"type": "string"},
-                    "glob": {"type": "string"},
-                    "max_results": {"type": "integer", "minimum": 1},
+                    "path": {"type": ["string", "null"]},
+                    "glob": {"type": ["string", "null"]},
+                    "max_results": {"type": ["integer", "null"], "minimum": 1},
                 },
                 ["query"],
             ),
             search_files,
+            risk="read",
         ),
         ToolSpec(
             "apply_patch",
@@ -306,7 +531,7 @@ def create_default_tools() -> list[ToolSpec]:
                     "path": {"type": "string"},
                     "old_text": {"type": "string"},
                     "new_text": {"type": "string"},
-                    "replace_all": {"type": "boolean"},
+                    "replace_all": {"type": ["boolean", "null"]},
                 },
                 ["path", "old_text", "new_text"],
             ),
@@ -319,7 +544,7 @@ def create_default_tools() -> list[ToolSpec]:
             _object_schema(
                 {
                     "command": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-                    "cwd": {"type": "string"},
+                    "cwd": {"type": ["string", "null"]},
                 },
                 ["command"],
             ),

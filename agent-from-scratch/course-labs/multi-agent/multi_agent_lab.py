@@ -103,6 +103,7 @@ class ReviewCase:
     id: str
     candidate: str
     required_fragments: tuple[str, ...]
+    actual_valid: bool
 
 
 @dataclass(frozen=True)
@@ -124,25 +125,38 @@ def review_candidate(case: ReviewCase) -> Review:
 class Comparison:
     single_false_accepts: int
     reviewer_false_accepts: int
+    reviewer_false_rejects: int
     communication_chars: int
 
 
 def compare_single_and_reviewer(cases: list[ReviewCase]) -> Comparison:
     # Scripted single-agent baseline self-approves every candidate.
-    single_false_accepts = sum(not review_candidate(case).approved for case in cases)
+    single_false_accepts = sum(not case.actual_valid for case in cases)
     shared = SharedState()
     reviewer_false_accepts = 0
+    reviewer_false_rejects = 0
     for case in cases:
         shared.record("executor", "reviewer", case.candidate)
         review = review_candidate(case)
         shared.record("reviewer", "executor", "approved" if review.approved else "; ".join(review.issues))
-        if review.approved and any(fragment not in case.candidate for fragment in case.required_fragments):
+        if review.approved and not case.actual_valid:
             reviewer_false_accepts += 1
-    return Comparison(single_false_accepts, reviewer_false_accepts, shared.communication_chars)
+        if not review.approved and case.actual_valid:
+            reviewer_false_rejects += 1
+    return Comparison(
+        single_false_accepts,
+        reviewer_false_accepts,
+        reviewer_false_rejects,
+        shared.communication_chars,
+    )
 
 
 def decide_from_comparison(comparison: Comparison) -> ArchitectureDecision:
-    gain = comparison.single_false_accepts - comparison.reviewer_false_accepts
+    gain = (
+        comparison.single_false_accepts
+        - comparison.reviewer_false_accepts
+        - comparison.reviewer_false_rejects
+    )
     if gain <= 0:
         return ArchitectureDecision(False, ("Reviewer produced no measured quality gain.",))
     return ArchitectureDecision(

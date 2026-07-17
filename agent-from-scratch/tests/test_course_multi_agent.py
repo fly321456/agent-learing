@@ -67,8 +67,8 @@ def test_shared_state_measures_communication_cost() -> None:
 def test_reviewer_reduces_false_accepts_but_is_not_always_recommended() -> None:
     lab = load_lab()
     cases = [
-        lab.ReviewCase("good", "code plus tests", ("code", "tests")),
-        lab.ReviewCase("missing-tests", "code only", ("code", "tests")),
+        lab.ReviewCase("good", "code plus tests", ("code", "tests"), True),
+        lab.ReviewCase("missing-tests", "code only", ("code", "tests"), False),
     ]
     comparison = lab.compare_single_and_reviewer(cases)
     assert comparison.single_false_accepts == 1
@@ -76,7 +76,7 @@ def test_reviewer_reduces_false_accepts_but_is_not_always_recommended() -> None:
     assert comparison.communication_chars > 0
     assert lab.decide_from_comparison(comparison).use_multi_agent is True
 
-    no_gain = lab.Comparison(0, 0, 100)
+    no_gain = lab.Comparison(0, 0, 0, 100)
     assert lab.decide_from_comparison(no_gain).use_multi_agent is False
 
 

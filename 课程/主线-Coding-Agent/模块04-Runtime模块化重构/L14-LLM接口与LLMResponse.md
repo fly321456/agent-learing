@@ -166,3 +166,7 @@ model_call tools=1 continuation=1
 5. Fake LLM 除了节省费用，还能检查什么架构问题？
 
 本课建立了模型边界，但 Tool 仍只是函数字典。下一课进入 [L15 ToolManager 与 ToolResult](L15-ToolManager与ToolResult.md)，把“模型想做什么”与“应用实际执行出什么结果”分开。
+
+## 最终实现校准
+
+正式 OpenAI 适配层不会只读取 `output_text`。它先解析 function call，再识别 refusal 内容块，并把 `incomplete`、`failed`、`cancelled` 分别映射为显式 `finish_reason` 和 `status_detail`；同步调用若仍是 `queued` 或 `in_progress` 会被拒绝，未知状态也不会默认为成功。这样 Runner、CLI 与测试不必了解 SDK 对象，但仍能区分“正常完成”“模型拒绝”和“供应商未完成”。依据见 [Responses create 官方参考](https://developers.openai.com/api/reference/resources/responses/methods/create)。

@@ -26,14 +26,14 @@ Reviewer 方案：Executor 产生同一候选 -> Reviewer 按同一标准检查
 
 ## 3. 两个具体案例
 
-案例一是合格候选：`"code plus tests"`，验收标准要求同时出现 `code` 与 `tests`。单 Agent 和 Reviewer 都应接受它。若 Reviewer 拒绝，产生的是误拒绝；本实验虽未统计误拒绝，但正式评测不能忽略。
+案例一是合格候选：`"code plus tests"`，验收标准要求同时出现 `code` 与 `tests`，并由独立 `actual_valid=True` 标记真值。单 Agent 和 Reviewer 都应接受它；若 Reviewer 拒绝，形成 `reviewer_false_rejects`。
 
 案例二是不合格候选：`"code only"`，仍要求 `code` 与 `tests`。单 Agent 自审会接受，形成一次错误接受；Reviewer 检查到缺少 `tests`，应返回拒绝及明确问题。
 
 ~~~python
 cases = [
-    ReviewCase("good", "code plus tests", ("code", "tests")),
-    ReviewCase("bad", "code only", ("code", "tests")),
+    ReviewCase("good", "code plus tests", ("code", "tests"), True),
+    ReviewCase("bad", "code only", ("code", "tests"), False),
 ]
 ~~~
 
@@ -41,21 +41,22 @@ cases = [
 
 ## 4. 核心概念：先定义指标，再选择架构
 
-本课使用三个指标：
+本课使用四个指标：
 
 | 指标 | 含义 | 越小越好吗 |
 | --- | --- | --- |
 | `single_false_accepts` | 单 Agent 接受了多少不合格结果 | 是 |
 | `reviewer_false_accepts` | Reviewer 方案接受了多少不合格结果 | 是 |
+| `reviewer_false_rejects` | Reviewer 方案拒绝了多少合格结果 | 是 |
 | `communication_chars` | Executor 与 Reviewer 往返文本字符数 | 是，但不能脱离质量看 |
 
 质量增益定义为：
 
 ~~~text
-gain = single_false_accepts - reviewer_false_accepts
+gain = single_false_accepts - reviewer_false_accepts - reviewer_false_rejects
 ~~~
 
-当 `gain <= 0` 时，Reviewer 没有减少错误接受，应默认保留单 Agent。只有 `gain > 0`，本实验才推荐 Reviewer，同时报告通信字符数，而不是隐藏成本。这个规则很保守，因为它还没有统计延迟、Token、误拒绝和维护成本；真实项目的保留门槛应该更高。
+当 `gain <= 0` 时，Reviewer 没有产生净质量收益，应默认保留单 Agent。只有 `gain > 0`，本实验才推荐 Reviewer，同时报告通信字符数，而不是隐藏成本。这里把两类错误暂按同权处理；真实项目应按业务损失为误收、误拒、延迟、Token 和维护成本设权重。
 
 ## 5. Reviewer 协议如何保持最小
 
@@ -67,6 +68,7 @@ class ReviewCase:
     id: str
     candidate: str
     required_fragments: tuple[str, ...]
+    actual_valid: bool
 
 @dataclass(frozen=True)
 class Review:
@@ -96,24 +98,26 @@ def review_candidate(case: ReviewCase) -> Review:
 
 ~~~python
 def compare_single_and_reviewer(cases: list[ReviewCase]) -> Comparison:
-    single_false_accepts = sum(
-        not review_candidate(case).approved for case in cases
-    )
+    single_false_accepts = sum(not case.actual_valid for case in cases)
     shared = SharedState()
     reviewer_false_accepts = 0
+    reviewer_false_rejects = 0
     for case in cases:
         shared.record("executor", "reviewer", case.candidate)
         review = review_candidate(case)
         response = "approved" if review.approved else "; ".join(review.issues)
         shared.record("reviewer", "executor", response)
+        reviewer_false_accepts += int(review.approved and not case.actual_valid)
+        reviewer_false_rejects += int(not review.approved and case.actual_valid)
     return Comparison(
         single_false_accepts,
         reviewer_false_accepts,
+        reviewer_false_rejects,
         shared.communication_chars,
     )
 ~~~
 
-实验实现还保留了 Reviewer 错误接受的显式判断。当前确定性 Reviewer 不会漏掉必需片段，所以值为零；字段仍然存在，是为了让接口表达真实评测目标，而不是把“Reviewer 永远正确”写死在结果模型中。
+`actual_valid` 是独立真值，不能由正在被评测的 Reviewer 推导。否则 Reviewer 自己定义“合格”又证明自己正确，错误接受和误拒绝都会失去意义。
 
 ## 7. 完整运行轨迹
 
@@ -135,6 +139,7 @@ case=bad
 summary
   single_false_accepts=1
   reviewer_false_accepts=0
+  reviewer_false_rejects=0
   gain=1
   communication_chars=83
   recommended=true
@@ -164,13 +169,13 @@ python course-labs/multi-agent/demo.py
 python -m pytest -q tests/test_course_multi_agent.py
 ~~~
 
-测试还构造 `Comparison(0, 0, 100)`，验证没有质量增益时必须推荐单 Agent，即使 Reviewer 流程本身运行正常。
+测试还构造无净增益和过严 Reviewer 场景，验证误拒绝会抵消收益；Reviewer 流程运行正常不等于值得保留。
 
 ## 9. 两个错误直觉与反例纠错
 
 **错误直觉一：独立 Reviewer 一定比自审可靠。** 如果 Reviewer 与 Executor 使用相同上下文、相同盲点和模糊标准，它可能只是重复同一个错误。反例：所有候选本来都合格，单 Agent 与 Reviewer 错误接受都为零，Reviewer 只增加 100 个通信字符。此时 `gain=0`，应回退单 Agent。
 
-**错误直觉二：错误接受下降就足以证明方案更好。** 若 Reviewer 把所有结果都拒绝，错误接受会降到零，但误拒绝和人工返工会暴涨。正式评测还应记录误拒绝率、任务完成率、调用次数、Token、延迟和失败类型。本实验只证明最小质量增益，不宣称完成了全部商业决策。
+**错误直觉二：错误接受下降就足以证明方案更好。** 若 Reviewer 把所有结果都拒绝，错误接受会降到零，但 `reviewer_false_rejects` 和人工返工会暴涨。正式评测还应记录任务完成率、调用次数、Token、延迟和失败类型。本实验只证明最小净质量增益，不宣称完成了全部商业决策。
 
 另一个常见错误是同时更换模型、重写 Prompt、增加 Reviewer 和扩大任务集。结果改善后无法知道是哪项变化带来收益。实验必须一次只改变一个变量。
 
@@ -178,7 +183,7 @@ python -m pytest -q tests/test_course_multi_agent.py
 
 基础练习：增加第三个案例，候选含 `tests` 却缺少 `code`，手工预测两个错误接受指标与通信字符数，再运行验证。解释为什么字符数变化但架构决策仍可能不变。
 
-进阶练习：为 `Comparison` 增加 `reviewer_false_rejects`，同时加入一个会被过严 Reviewer 拒绝的有效案例。设计决策函数时，不要简单相减；先说明错误接受和误拒绝在你的项目中各自成本是多少。
+进阶练习：加入一个会被过严 Reviewer 拒绝的有效案例，先用当前同权公式观察决策，再为两类错误加入不同业务权重并解释权重来源。
 
 最终挑战：从主线 20 个 Coding Agent 评测任务中选 5 个适合审查的任务，冻结单 Agent 输出，再让 Reviewer 只读这些输出。记录质量增益、额外调用、延迟和通信量。若没有稳定增益，写出“拒绝引入多 Agent”的结论，这同样是合格实验结果。
 

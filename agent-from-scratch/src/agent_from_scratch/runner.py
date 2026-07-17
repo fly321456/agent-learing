@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from .agent import Agent
 from .errors import RetryableLLMError
+from .redaction import sanitize_for_logging
 from .schemas import Event, RunResult, ToolResult
 from .session import CheckpointStore, RunCheckpoint
 from .tools import ToolContext, ToolManager
@@ -33,9 +34,17 @@ class Runner:
         *,
         retry_policy: RetryPolicy | None = None,
         checkpoint_store: CheckpointStore | None = None,
+        max_tool_calls_per_step: int = 16,
     ):
+        if (
+            not isinstance(max_tool_calls_per_step, int)
+            or isinstance(max_tool_calls_per_step, bool)
+            or max_tool_calls_per_step < 1
+        ):
+            raise ValueError("max_tool_calls_per_step must be a positive integer")
         self.retry_policy = retry_policy or RetryPolicy()
         self.checkpoint_store = checkpoint_store
+        self.max_tool_calls_per_step = max_tool_calls_per_step
 
     def run(
         self,
@@ -58,6 +67,7 @@ class Runner:
             input_items=input_items,
             events=[],
             tool_results=[],
+            completed_calls={},
             run_id=run_id,
             start_step=1,
             context=context or ToolContext(workspace=Path.cwd()),
@@ -82,6 +92,7 @@ class Runner:
             input_items=checkpoint.input_items,
             events=checkpoint.events,
             tool_results=checkpoint.tool_results,
+            completed_calls=checkpoint.completed_calls,
             run_id=checkpoint.run_id,
             start_step=checkpoint.next_step,
             context=context or ToolContext(workspace=Path.cwd()),
@@ -97,6 +108,7 @@ class Runner:
         input_items: list,
         events: list[Event],
         tool_results: list[ToolResult],
+        completed_calls: dict[str, ToolResult],
         run_id: str,
         start_step: int,
         context: ToolContext,
@@ -106,7 +118,13 @@ class Runner:
         manager = ToolManager(agent.tools)
 
         def emit(event_type: str, step: int, **data) -> None:
-            event = Event(event_type, len(events) + 1, run_id, step, data)
+            event = Event(
+                event_type,
+                len(events) + 1,
+                run_id,
+                step,
+                sanitize_for_logging(data),
+            )
             events.append(event)
             if event_sink is not None:
                 event_sink(event)
@@ -147,6 +165,15 @@ class Runner:
             if not response.tool_calls:
                 return finish(response.content, step, response.finish_reason or "completed")
 
+            if len(response.tool_calls) > self.max_tool_calls_per_step:
+                emit(
+                    "tool_call_limit_exceeded",
+                    step,
+                    requested=len(response.tool_calls),
+                    limit=self.max_tool_calls_per_step,
+                )
+                return finish("", step, "error")
+
             for tool_call in response.tool_calls:
                 emit(
                     "tool_called",
@@ -155,9 +182,23 @@ class Runner:
                     name=tool_call.name,
                     arguments=tool_call.arguments,
                 )
-                result = manager.execute(tool_call, context)
-                tool_results.append(result)
-                emit("tool_completed", step, **asdict(result))
+                cached = completed_calls.get(tool_call.id)
+                if cached is not None:
+                    if cached.name != tool_call.name:
+                        emit(
+                            "tool_failed",
+                            step,
+                            call_id=tool_call.id,
+                            error="A completed call_id was reused for a different tool",
+                        )
+                        return finish("", step, "error")
+                    result = cached
+                    emit("tool_reused", step, **asdict(result))
+                else:
+                    result = manager.execute(tool_call, context)
+                    tool_results.append(result)
+                    completed_calls[tool_call.id] = result
+                    emit("tool_completed", step, **asdict(result))
 
                 if result.status == "denied":
                     return finish("", step, "denied")
@@ -170,12 +211,23 @@ class Runner:
                     }
                 )
 
+                self._save_checkpoint(
+                    run_id,
+                    user_input,
+                    input_items,
+                    events,
+                    tool_results,
+                    completed_calls,
+                    next_step=step + 1,
+                )
+
             self._save_checkpoint(
                 run_id,
                 user_input,
                 input_items,
                 events,
                 tool_results,
+                completed_calls,
                 next_step=step + 1,
             )
 
@@ -201,6 +253,7 @@ class Runner:
         input_items,
         events,
         tool_results,
+        completed_calls,
         *,
         next_step,
     ) -> None:
@@ -214,5 +267,6 @@ class Runner:
                 events=list(events),
                 tool_results=list(tool_results),
                 next_step=next_step,
+                completed_calls=dict(completed_calls),
             )
         )
